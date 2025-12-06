@@ -9,6 +9,7 @@ Se ha mejorado el extractor de Certificados de Revisión Técnica (CRT) para que
 ## 🎯 Problema Original
 
 El sistema **solo aceptaba PDFs que contenían ambos certificados**:
+
 - ✅ Certificado de Revisión Técnica
 - ✅ Certificado de Emisiones Contaminantes
 
@@ -58,6 +59,7 @@ El sistema extrae **los mismos campos** en el **mismo orden**:
 ### **1. Función `extraerDatosCRT()` - Archivo: `src/extractors/crtExtractor.ts`**
 
 **Antes:**
+
 ```typescript
 // Lanzaba error si no encontraba ambos certificados
 if (!revisionSectionMatch || !contaminantesSectionMatch) {
@@ -68,6 +70,7 @@ if (!revisionSectionMatch || !contaminantesSectionMatch) {
 ```
 
 **Ahora:**
+
 ```typescript
 // Acepta uno o ambos certificados
 if (!revisionSectionMatch && !contaminantesSectionMatch) {
@@ -89,6 +92,7 @@ if (contaminantesSectionMatch) {
 ### **2. Función `bestEffortValidationCRT()`**
 
 **Mejoras en validación:**
+
 - ✅ Campos obligatorios: Fecha, Planta, Placa Patente, Folio
 - ✅ Campos condicionales: Los "Válido Hasta" se validan solo si están presentes
 - ✅ Validación flexible: Al menos uno de los "Válido Hasta" debe tener valor
@@ -99,28 +103,32 @@ if (contaminantesSectionMatch) {
 ## 🧪 Casos de Prueba
 
 ### **Caso 1: PDF con ambos certificados**
-```
+
+```text
 Entrada: PDF con RT + EC
 Resultado: ✅ Extrae ambos "Válido Hasta"
 Excel: Todas las columnas con datos
 ```
 
 ### **Caso 2: PDF solo con Revisión Técnica**
-```
+
+```text
 Entrada: PDF solo con RT
 Resultado: ✅ Extrae "Válido Hasta Revisión Técnica"
 Excel: Columna "Válido Hasta Contaminantes" vacía
 ```
 
 ### **Caso 3: PDF solo con Emisiones Contaminantes**
-```
+
+```text
 Entrada: PDF solo con EC
 Resultado: ✅ Extrae "Válido Hasta Contaminantes"
 Excel: Columna "Válido Hasta Revisión Técnica" vacía
 ```
 
 ### **Caso 4: PDF sin certificados válidos**
-```
+
+```text
 Entrada: PDF sin RT ni EC
 Resultado: ❌ Error descriptivo
 ```
@@ -153,7 +161,7 @@ Resultado: ❌ Error descriptivo
 
 El sistema ahora proporciona **mejor información** sobre qué se encontró:
 
-```
+```text
 [Server INFO]: Iniciando extracción de datos CRT.
 [Server INFO]: Fecha de Revisión extraída: 10 OCTUBRE 2023
 [Server INFO]: Planta extraída: PLANTA-01
@@ -192,24 +200,29 @@ El sistema ahora proporciona **mejor información** sobre qué se encontró:
 ## 🚀 Cómo Probar la Mejora
 
 ### **Paso 1: Iniciar el servidor**
+
 ```bash
 bun run dev
 ```
 
 ### **Paso 2: Acceder a la aplicación**
-```
+
+```text
 http://localhost:3000
 ```
 
 ### **Paso 3: Seleccionar formato CRT**
+
 - Hacer clic en el botón "CRT"
 
 ### **Paso 4: Cargar PDFs de prueba**
+
 - Ubicados en: `pdf de prueba/`
   - `RZVJ90_REV_TEC2025.pdf`
   - `SZRV65_REV_TEC2025.pdf`
 
 ### **Paso 5: Verificar resultados**
+
 - Los PDFs se procesan correctamente
 - Se genera el Excel con todas las columnas
 - Las columnas vacías aparecen en blanco (no como error)
@@ -218,7 +231,7 @@ http://localhost:3000
 
 ## 📦 Archivos Modificados
 
-```
+```text
 ✅ src/extractors/crtExtractor.ts
    - extraerDatosCRT() - Extracción flexible
    - bestEffortValidationCRT() - Validación condicional
@@ -231,6 +244,7 @@ http://localhost:3000
 La mejora implementada hace que el sistema sea **más robusto y flexible** sin comprometer la funcionalidad existente. Ahora puede procesar una mayor variedad de PDFs de Revisión Técnica, manteniendo la calidad y estructura de los datos extraídos.
 
 **Beneficios:**
+
 - ✅ Mayor tasa de éxito en procesamiento
 - ✅ Menos rechazos por formato
 - ✅ Misma estructura de datos

@@ -1,5 +1,4 @@
 
-
 # Conversor PDF a Excel
 
 **Conversor PDF a Excel** es una aplicación desarrollada con Next.js y TypeScript que permite convertir archivos PDF a un documento Excel. Soporta diversos formatos de PDF, incluyendo:
@@ -15,19 +14,19 @@ La aplicación extrae datos relevantes de los PDFs utilizando extractores espec�
 
 ## Características
 
-- **Extracción y Validación de Datos:**  
+- **Extracción y Validación de Datos:**
   Cada formato de PDF cuenta con un extractor especializado que utiliza expresiones regulares para obtener y validar campos críticos.
 
-- **Generación de Excel:**  
+- **Generación de Excel:**
   Los datos se organizan en una hoja de Excel, con una hoja adicional opcional para mostrar estadísticas (totales procesados, éxitos, fallos y detalles de archivos fallidos).
 
-- **Feedback en Tiempo Real:**  
+- **Feedback en Tiempo Real:**
   Se informa al usuario sobre el progreso del procesamiento de los PDFs mediante SSE, permitiendo visualizar actualizaciones y tiempos estimados.
 
-- **Interfaz de Usuario Intuitiva:**  
+- **Interfaz de Usuario Intuitiva:**
   Basada en React, facilita la carga de archivos mediante arrastrar y soltar, selección de formato y vista previa de los resultados.
 
-- **Pruebas Automatizadas:**  
+- **Pruebas Automatizadas:**
   Cuenta con una robusta suite de tests con Jest y ESLint para mantener la calidad del código y la estabilidad del proyecto.
 
 ---
@@ -36,7 +35,7 @@ La aplicación extrae datos relevantes de los PDFs utilizando extractores espec�
 
 ### Requisitos
 
-- **Node.js y npm:**  
+- **Node.js y npm:**
   Asegúrate de tener instaladas versiones compatibles con Next.js.
 
 ### Pasos
@@ -54,13 +53,13 @@ La aplicación extrae datos relevantes de los PDFs utilizando extractores espec�
    npm install
    ```
 
-3. **Configura las variables de entorno:**  
+3. **Configura las variables de entorno:**
    Crea un archivo `.env.local` en la raíz del proyecto y define, al menos, la variable:
-   
+
    ```env
    NEXT_PUBLIC_MAX_FILE_SIZE=5242880
    ```
-   
+
    (Puedes ajustar este valor según tus necesidades.)
 
 ---
@@ -77,7 +76,7 @@ La aplicación extrae datos relevantes de los PDFs utilizando extractores espec�
 
 2. Abre la aplicación en [http://localhost:3000](http://localhost:3000).
 
-3. **Carga y Conversión:**  
+3. **Carga y Conversión:**
    - Selecciona o arrastra los archivos PDF a la interfaz.
    - Selecciona el formato correspondiente mediante los botones disponibles.
    - Observa el progreso en tiempo real y, al finalizar, visualiza una vista previa del Excel.
@@ -97,21 +96,21 @@ npm run test
 
 El proyecto se organiza en las siguientes áreas:
 
-- **Frontend:**  
+- **Frontend:**
   Implementado en React, con componentes reutilizables como:
   - `FileUpload` y `Parent` para la carga de archivos.
   - `InstructionsModal` para mostrar instrucciones al usuario.
   - `app/page.tsx` que gestiona el flujo de carga, procesamiento y visualización.
 
-- **Backend/API:**  
+- **Backend/API:**
   - La ruta API en `app/api/convert/route.ts` recibe los archivos y el formato seleccionado.
   - Procesa los PDFs de forma concurrente (usando `p-limit`) y envía actualizaciones en tiempo real mediante SSE.
 
-- **Extractores y Utilidades:**  
+- **Extractores y Utilidades:**
   - Los extractores (en la carpeta `extractors/`) se encargan de extraer datos específicos de cada formato.
   - Las utilidades en `utils/` incluyen funciones para parseo, validaciones, generación del Excel y logging.
 
-- **Pruebas:**  
+- **Pruebas:**
   - Test unitarios escritos en Jest y configurados en `jest.config.js` para asegurar la calidad del código.
 
 ---
@@ -131,4 +130,3 @@ El proyecto se organiza en las siguientes áreas:
 Este proyecto está bajo la licencia [MIT](LICENSE).
 
 ---
-

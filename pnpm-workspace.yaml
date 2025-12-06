@@ -1,0 +1,4 @@
+ignoredBuiltDependencies:
+  - sharp
+
+minimumReleaseAge: 2880
