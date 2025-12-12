@@ -1,4 +1,5 @@
 ignoredBuiltDependencies:
   - sharp
 
-minimumReleaseAge: 2880
+# Reducido temporalmente para instalar parches de seguridad CVE-2025-55184
+minimumReleaseAge: 720
