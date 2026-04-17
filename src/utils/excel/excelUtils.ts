@@ -220,14 +220,13 @@ export async function generateExcel(
   if (orderedRegistros.length === 0) {
     dataSheet.cell(1, 1).value("No se encontraron datos para generar el Excel.");
   } else {
-    headers.forEach((header, colIndex) => {
-      dataSheet.cell(1, colIndex + 1).value(header);
+    // Escritura bulk: construir matriz 2D con headers + datos y escribir de una vez
+    const matrix: (string | number)[][] = [headers];
+    orderedRegistros.forEach((registro) => {
+      matrix.push(headers.map((header) => registro[header] || ""));
     });
-    orderedRegistros.forEach((registro, rowIndex) => {
-      headers.forEach((header, colIndex) => {
-        dataSheet.cell(rowIndex + 2, colIndex + 1).value(registro[header] || "");
-      });
-    });
+    dataSheet.cell("A1").value(matrix);
+
     setColumnWidths(dataSheet, headers, orderedRegistros);
     adjustRowHeights(dataSheet, orderedRegistros);
   }
