@@ -9,7 +9,7 @@ describe("permisoCirculacionExtractor", () => {
       Codigo SII: SII456
       Valor Permiso: 1000
       Pago total: X
-      Pago cuota 1: 
+      Pago cuota 1:
       Pago cuota 2: X
       Total a pagar: 1500
       Fecha de emisión: 01/01/2025
@@ -31,11 +31,11 @@ describe("permisoCirculacionExtractor", () => {
     expect(data["Forma de Pago"]).toBe("EFECTIVO");
   });
 
-  test("bestEffortValidationPermisoCirculacion debe emitir warnings para datos inválidos", () => {
+  test("bestEffortValidationPermisoCirculacion debe lanzar error para datos inválidos", () => {
     const datosInvalidos = {
-      "Placa Única": "INVALID!",
+      "Placa Única": "",
       "Código SII": "",
-      "Valor Permiso": "abc",
+      "Valor Permiso": "ab",
       "Pago total": "No aplica", // se considera válido
       "Pago Cuota 1": "X",
       "Pago Cuota 2": "X",
@@ -45,9 +45,8 @@ describe("permisoCirculacionExtractor", () => {
       "Forma de Pago": "Efectivo"
     };
 
-    const warnSpy = jest.spyOn(logger, "warn").mockImplementation(() => {});
-    bestEffortValidationPermisoCirculacion(datosInvalidos, "testFile.pdf");
-    expect(warnSpy).toHaveBeenCalled();
-    warnSpy.mockRestore();
+    expect(() => bestEffortValidationPermisoCirculacion(datosInvalidos, "testFile.pdf")).toThrow(
+      /presenta problemas/
+    );
   });
 });
