@@ -2,6 +2,7 @@
 import PDFParser from "pdf2json";
 import logger from "../logger";
 import type { PDFFormat } from "@/types/pdfFormat";
+import { parsePDFWithWorker } from "./pdfWorkerPool";
 
 // Importa los extractores y validadores (ajusta las rutas según tu proyecto)
 import { extraerDatosHomologacion, bestEffortValidationHomologacion } from "@/extractors/homologacionExtractor";
@@ -22,12 +23,28 @@ export function buscar(text: string, pattern: RegExp): string | null {
 
 /**
  * Parsea el contenido de un archivo PDF y extrae el texto.
+ * Intenta usar worker threads para paralelismo real; si no están disponibles, usa parseo directo.
  * @param file Archivo PDF.
  * @returns Una promesa que resuelve con el texto extraído.
  */
 export async function parsePDFBuffer(file: File): Promise<string> {
   const arrayBuffer = await file.arrayBuffer();
   const buffer = Buffer.from(arrayBuffer);
+
+  // Intentar parseo con worker threads (paralelismo multi-core)
+  const workerResult = parsePDFWithWorker(buffer);
+  if (workerResult) {
+    return workerResult;
+  }
+
+  // Fallback: parseo en hilo principal
+  return parsePDFBufferDirect(buffer);
+}
+
+/**
+ * Parseo directo en el hilo principal (fallback cuando workers no están disponibles).
+ */
+function parsePDFBufferDirect(buffer: Buffer): Promise<string> {
   return new Promise<string>((resolve, reject) => {
     const pdfParser = new PDFParser();
     pdfParser.on("pdfParser_dataError", (errData: any) => {

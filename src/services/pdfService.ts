@@ -38,8 +38,8 @@ interface ProcessOptions {
 }
 
 /**
- * Procesa un arreglo de archivos PDF en lotes para evitar bloquear el event loop.
- * Emite eventos de progreso y retorna un arreglo de resultados "settled" para cada archivo.
+ * Procesa un arreglo de archivos PDF con p-limit para concurrencia controlada.
+ * Emite eventos de progreso con throttle adaptativo y retorna un arreglo de resultados "settled" para cada archivo.
  */
 export async function processPDFFiles({
   files,
@@ -53,20 +53,21 @@ export async function processPDFFiles({
   let processedCount = 0;
   let successesCount = 0;
   let failuresCount = 0;
-  const start = Date.now(); // <-- Marca el inicio global
+  const start = Date.now();
 
-  const results: SettledResult[] = [];
-  const batchSize = 100; // Ajusta el tamaño del lote según tu servidor
+  // Throttle adaptativo: menos eventos SSE para lotes grandes
+  const throttleInterval = totalFiles < 50 ? 1 : totalFiles < 500 ? 5 : 20;
 
-  for (let i = 0; i < files.length; i += batchSize) {
-    const batch = files.slice(i, i + batchSize);
-    const promises: Array<Promise<SettledResult>> = batch.map((file) =>
-      limit(async () => {
-        try {
-          const result = await procesarPDF(file, pdfFormat, returnRegex);
-          processedCount++;
-          successesCount++;
-          const elapsedMsSoFar = Date.now() - start; // <-- Tiempo real transcurrido
+  const promises: Array<Promise<SettledResult>> = files.map((file) =>
+    limit(async () => {
+      try {
+        const result = await procesarPDF(file, pdfFormat, returnRegex);
+        processedCount++;
+        successesCount++;
+        const elapsedMsSoFar = Date.now() - start;
+
+        // Solo emitir SSE cada N archivos o al final
+        if (processedCount % throttleInterval === 0 || processedCount === totalFiles) {
           const avgTimePerFile = elapsedMsSoFar / processedCount;
           const remaining = totalFiles - processedCount;
           const estimatedMsLeft = Math.round(avgTimePerFile * remaining);
@@ -77,33 +78,37 @@ export async function processPDFFiles({
             file: file.name,
             status: "fulfilled",
             estimatedMsLeft,
-            elapsedMsSoFar, // <-- Envía el tiempo real transcurrido
+            elapsedMsSoFar,
             successes: successesCount,
             failures: failuresCount,
           });
+        }
 
-          return {
-            status: "fulfilled",
-            value: {
-              fileName: file.name,
-              ...result,
-            },
-          } as SettledSuccess;
-        } catch (error: any) {
-          processedCount++;
-          failuresCount++;
-          const elapsedMsSoFar = Date.now() - start;
+        return {
+          status: "fulfilled",
+          value: {
+            fileName: file.name,
+            ...result,
+          },
+        } as SettledSuccess;
+      } catch (error: any) {
+        processedCount++;
+        failuresCount++;
+        const elapsedMsSoFar = Date.now() - start;
+
+        let errorMsg = error.message || "Error desconocido";
+        if (errorMsg.includes("Se detectó que pertenece a:")) {
+          errorMsg = errorMsg.replace(
+            /Se detectó que pertenece a:\s*(.*)/,
+            '<span style="background-color: yellow; font-weight: bold;">Se detectó que pertenece a: $1</span>'
+          );
+        }
+
+        // Siempre emitir eventos de error para visibilidad
+        if (processedCount % throttleInterval === 0 || processedCount === totalFiles) {
           const avgTimePerFile = elapsedMsSoFar / processedCount;
           const remaining = totalFiles - processedCount;
           const estimatedMsLeft = Math.round(avgTimePerFile * remaining);
-
-          let errorMsg = error.message || "Error desconocido";
-          if (errorMsg.includes("Se detectó que pertenece a:")) {
-            errorMsg = errorMsg.replace(
-              /Se detectó que pertenece a:\s*(.*)/,
-              '<span style="background-color: yellow; font-weight: bold;">Se detectó que pertenece a: $1</span>'
-            );
-          }
 
           onEvent({
             progress: processedCount,
@@ -112,31 +117,24 @@ export async function processPDFFiles({
             status: "rejected",
             error: errorMsg,
             estimatedMsLeft,
-            elapsedMsSoFar, // <-- Envía el tiempo real transcurrido
+            elapsedMsSoFar,
             successes: successesCount,
             failures: failuresCount,
           });
-
-          return {
-            status: "rejected",
-            reason: {
-              fileName: file.name,
-              error: errorMsg,
-            },
-          } as SettledFailure;
         }
-      })
-    );
 
-    // Espera a que termine el lote actual
-    const batchResults = await Promise.all(promises);
-    results.push(...batchResults);
+        return {
+          status: "rejected",
+          reason: {
+            fileName: file.name,
+            error: errorMsg,
+          },
+        } as SettledFailure;
+      }
+    })
+  );
 
-    // Cede el control al event loop para evitar bloquear el servidor
-    await new Promise<void>((resolve) => setImmediate(resolve));
-  }
-
-  return results;
+  return Promise.all(promises);
 }
 
 /**
