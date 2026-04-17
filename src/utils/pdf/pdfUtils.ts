@@ -94,8 +94,9 @@ function detectarFormato(texto: string): PDFFormat | "DESCONOCIDO" {
   if (upperText.includes("SEGURO OBLIGATORIO") || upperText.includes("SOAP")) return "SOAP";
   if (upperText.includes("PERMISO DE CIRCULACIÓN") || upperText.includes("PLACA ÚNICA")) return "PERMISO_CIRCULACION";
   // Fallback: PDFs de Permiso de Circulación sin etiquetas (ej: municipalidades que emiten sin keywords explícitos)
-  // "VERDE-0", "VERDE-1", etc. es el sello verde, exclusivo de Permiso de Circulación
-  if (/VERDE-\d/.test(upperText)) return "PERMISO_CIRCULACION";
+  // "VERDE-0", "VERDE-.", "*-0", etc. es el sello verde, exclusivo de Permiso de Circulación
+  // pdf2json puede extraer el dígito como punto o "VERDE" como "*" según la fuente del PDF
+  if (/VERDE-[\d.]|\*-\d/i.test(upperText)) return "PERMISO_CIRCULACION";
   return "DESCONOCIDO";
 }
 

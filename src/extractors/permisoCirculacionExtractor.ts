@@ -20,8 +20,11 @@ function extraerDatosPCSinEtiquetas(t: string): { data: Record<string, string>; 
                   || t.match(/\b([A-Z]{2}\d{4}-\d)\b/i);
   data["Placa Única"] = placaMatch ? placaMatch[1] : "";
 
-  // === Fechas (dd/mm/yyyy) ===
-  const fechasUnicas = [...new Set(t.match(/\b\d{2}\/\d{2}\/\d{4}\b/g) || [])];
+  // === Fechas (dd/mm/yyyy o dd-mm-yyyy) ===
+  // pdf2json puede extraer fechas con barras (/) o guiones (-) según el formato del PDF
+  const fechasSlash = t.match(/\b\d{2}\/\d{2}\/\d{4}\b/g) || [];
+  const fechasDash = (t.match(/\b\d{2}-\d{2}-\d{4}\b/g) || []).map(f => f.replace(/-/g, "/"));
+  const fechasUnicas = [...new Set([...fechasSlash, ...fechasDash])];
   if (fechasUnicas.length >= 2) {
     const sorted = fechasUnicas
       .map(f => {
