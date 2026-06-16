@@ -1,3 +1,8 @@
+# Forzamos lodash >=4.18.1 (transitivo vía xlsx-populate) para cerrar
+# CVE de code injection (_.template) y prototype pollution (_.unset/_.omit).
+overrides:
+  lodash@<4.18.1: 4.18.1
+
 allowBuilds:
   esbuild: true
 

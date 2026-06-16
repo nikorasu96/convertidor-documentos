@@ -5,7 +5,11 @@ import { ConversionError } from "../../domain/errors";
 import { buscar } from "../shared";
 
 function extract(text: string): DocumentData {
-  const t = text.replace(/\r?\n|\r/g, " ");
+  // Colapsamos TODA secuencia de espacios en blanco a un único espacio. Además de
+  // unir las líneas, esto elimina los tramos largos de espacios que provocaban
+  // backtracking cuadrático (ReDoS) en los regex con `\s*`/`\s+` de abajo: tras el
+  // colapso ningún cuantificador de espacios puede re-particionar un run grande.
+  const t = text.replace(/\s+/g, " ");
 
   const inscripcionRegex =
     /INSCRIPC[ÍI]ON\s*R\s*\.?\s*V\s*\.?\s*M\s*\.?\s*(?::|\-)?\s*([A-Z0-9]+\s*-\s*[A-Z0-9]+)/i;
@@ -13,7 +17,9 @@ function extract(text: string): DocumentData {
 
   const bajoCodigo = (buscar(t, /Bajo\s+el\s+c[óo]digo\s*[:\-]?\s*([A-Z0-9\-]+)/i) || "").trim();
 
-  const rutRegex = /RUT\s*[:\-]?\s*((?:\d{1,3}(?:\.\d{3})+)|\d{7,8})\s*[-]\s*([0-9kK])/i;
+  // Grupos de miles acotados a {1,4} (no `+`): defensa en profundidad frente a
+  // backtracking ante un run largo de "1.000.000…" (un RUT no excede 4 grupos).
+  const rutRegex = /RUT\s*[:\-]?\s*((?:\d{1,3}(?:\.\d{3}){1,4})|\d{7,8})\s*[-]\s*([0-9kK])/i;
   const rutMatch = t.match(rutRegex);
   const rut = rutMatch ? `${rutMatch[1].replace(/[.\s]/g, "")}-${rutMatch[2]}` : "";
 
