@@ -1,33 +1,46 @@
 
 # Conversor PDF a Excel
 
-**Conversor PDF a Excel** es una aplicación desarrollada con Next.js y TypeScript que permite convertir archivos PDF a un documento Excel. Soporta diversos formatos de PDF, incluyendo:
+**Conversor PDF a Excel** es una aplicación web (React + Vite 7 + TypeScript) que convierte archivos PDF a un documento Excel. Soporta diversos formatos de PDF, incluyendo:
 
 - Certificado de Homologación
 - Certificado de Revisión Técnica (CRT)
 - SOAP (Seguro Obligatorio)
 - Permiso de Circulación
 
-La aplicación extrae datos relevantes de los PDFs utilizando extractores específicos, valida la información y genera un Excel que incluye tanto los datos extraídos como (opcionalmente) estadísticas del procesamiento. Además, se utiliza Server-Sent Events (SSE) para notificar en tiempo real el progreso del procesamiento.
+La aplicación extrae datos relevantes de los PDFs utilizando extractores específicos, valida la información y genera un Excel que incluye tanto los datos extraídos como (opcionalmente) estadísticas del procesamiento.
+
+> **El procesamiento ocurre 100% en el navegador** (pool de Web Workers con
+> [unpdf](https://github.com/unjs/unpdf)/pdfjs). Los archivos **nunca se suben a
+> ningún servidor**. Rendimiento medido: **~1000 PDFs en ~3 s** en un equipo de
+> 16 núcleos. La arquitectura completa está documentada en
+> [`ARCHITECTURE.md`](./ARCHITECTURE.md).
 
 ---
 
 ## Características
 
+- **Procesamiento client-side de alto rendimiento:**
+  Un pool de Web Workers (tamaño = núcleos del equipo) parsea los PDFs en paralelo
+  sin bloquear la interfaz ni cargar ningún servidor.
+
 - **Extracción y Validación de Datos:**
-  Cada formato de PDF cuenta con un extractor especializado que utiliza expresiones regulares para obtener y validar campos críticos.
+  Cada formato de PDF cuenta con un extractor especializado (patrón Strategy) que
+  obtiene y valida los campos críticos.
 
 - **Generación de Excel:**
-  Los datos se organizan en una hoja de Excel, con una hoja adicional opcional para mostrar estadísticas (totales procesados, éxitos, fallos y detalles de archivos fallidos).
+  Hoja *Datos* + hoja opcional *Estadisticas* (totales y detalle de fallos).
 
-- **Feedback en Tiempo Real:**
-  Se informa al usuario sobre el progreso del procesamiento de los PDFs mediante SSE, permitiendo visualizar actualizaciones y tiempos estimados.
+- **Feedback en tiempo real:**
+  Progreso, conteos y tiempo estimado durante la conversión, con opción de cancelar.
 
-- **Interfaz de Usuario Intuitiva:**
-  Basada en React, facilita la carga de archivos mediante arrastrar y soltar, selección de formato y vista previa de los resultados.
+- **Privacidad y robustez:**
+  Los documentos no salen del equipo. Timeout por archivo, reciclaje de workers
+  colgados y errores tipados con mensajes claros.
 
 - **Pruebas Automatizadas:**
-  Cuenta con una robusta suite de tests con Jest y ESLint para mantener la calidad del código y la estabilidad del proyecto.
+  Tests unitarios con Vitest + un script de regresión contra PDFs reales
+  (`pnpm validate:extractors`).
 
 ---
 
@@ -35,83 +48,72 @@ La aplicación extrae datos relevantes de los PDFs utilizando extractores espec�
 
 ### Requisitos
 
-- **Node.js y npm:**
-  Asegúrate de tener instaladas versiones compatibles con Next.js.
+- **Node.js 20+** y **pnpm**.
 
 ### Pasos
 
-1. **Clona el repositorio:**
+1. **Clona el repositorio e instala dependencias:**
 
    ```bash
    git clone https://github.com/tu_usuario/tu_repositorio.git
    cd tu_repositorio
+   pnpm install
    ```
 
-2. **Instala las dependencias:**
-
-   ```bash
-   npm install
-   ```
-
-3. **Configura las variables de entorno:**
-   Crea un archivo `.env.local` en la raíz del proyecto y define, al menos, la variable:
-
-   ```env
-   NEXT_PUBLIC_MAX_FILE_SIZE=5242880
-   ```
-
-   (Puedes ajustar este valor según tus necesidades.)
+2. **(Opcional) variables de entorno:**
+   Copia `.env.example` a `.env.local` y ajusta límites si lo necesitas
+   (ver [`ENV_VARIABLES.md`](./ENV_VARIABLES.md)). Todas son opcionales y NO son secretos.
 
 ---
 
 ## Uso
 
-### En Desarrollo
-
-1. **Inicia el servidor de desarrollo:**
-
-   ```bash
-   npm run dev
-   ```
-
-2. Abre la aplicación en [http://localhost:3000](http://localhost:3000).
-
-3. **Carga y Conversión:**
-   - Selecciona o arrastra los archivos PDF a la interfaz.
-   - Selecciona el formato correspondiente mediante los botones disponibles.
-   - Observa el progreso en tiempo real y, al finalizar, visualiza una vista previa del Excel.
-   - Descarga el archivo Excel generado haciendo clic en el botón correspondiente.
-
-### Ejecución de Pruebas
-
-Para ejecutar todos los tests automatizados, utiliza:
+### Desarrollo
 
 ```bash
-npm run test
+pnpm dev        # servidor de desarrollo (Vite) en http://localhost:5173
+```
+
+- Selecciona o arrastra los archivos PDF.
+- Elige el formato (Homologación, CRT, SOAP, Permiso de Circulación).
+- Observa el progreso en tiempo real y, al finalizar, la vista previa del Excel.
+- Descarga el `.xlsx` generado.
+
+### Producción
+
+```bash
+pnpm build      # type-check + build con Rolldown -> dist/
+pnpm preview    # sirve dist/ localmente para verificar
+```
+
+> En hosting estático, replica las cabeceras de seguridad de `vite.config.ts`
+> (CSP, X-Frame-Options, etc.) en tu CDN/reverse proxy.
+
+### Calidad
+
+```bash
+pnpm test                  # tests unitarios (Vitest)
+pnpm typecheck             # comprobación de tipos (tsc)
+pnpm lint                  # ESLint
+pnpm validate:extractors   # regresión sobre los PDFs reales de "pdf pruebas/"
 ```
 
 ---
 
 ## Arquitectura del Proyecto
 
-El proyecto se organiza en las siguientes áreas:
+Arquitectura por capas con núcleo puro y procesamiento en Web Workers. Resumen:
 
-- **Frontend:**
-  Implementado en React, con componentes reutilizables como:
-  - `FileUpload` y `Parent` para la carga de archivos.
-  - `InstructionsModal` para mostrar instrucciones al usuario.
-  - `app/page.tsx` que gestiona el flujo de carga, procesamiento y visualización.
+- **`core/`** — Lógica pura e isomórfica (sin DOM/Node/React): dominio, detección
+  de formato, extractores (patrón Strategy + registry) y pipeline.
+- **`infra/`** — Adaptador del motor de texto (`unpdf`/pdfjs) detrás de una interfaz.
+- **`workers/`** — Web Worker que ejecuta el pipeline fuera del hilo principal.
+- **`client/`** — Orquestación en el navegador: pool de workers, motor, generación
+  de Excel y validación de archivos.
+- **`hooks/` + `components/` + `app/`** — UI en React (presentación) y el hook
+  `useConversion` (máquina de estados).
 
-- **Backend/API:**
-  - La ruta API en `app/api/convert/route.ts` recibe los archivos y el formato seleccionado.
-  - Procesa los PDFs de forma concurrente (usando `p-limit`) y envía actualizaciones en tiempo real mediante SSE.
-
-- **Extractores y Utilidades:**
-  - Los extractores (en la carpeta `extractors/`) se encargan de extraer datos específicos de cada formato.
-  - Las utilidades en `utils/` incluyen funciones para parseo, validaciones, generación del Excel y logging.
-
-- **Pruebas:**
-  - Test unitarios escritos en Jest y configurados en `jest.config.js` para asegurar la calidad del código.
+Detalle completo, principios SOLID y flujo en [`ARCHITECTURE.md`](./ARCHITECTURE.md).
 
 ---
 

@@ -1,35 +1,33 @@
 # Variables de Entorno
 
-El proyecto utiliza las siguientes variables de entorno opcionales:
+El procesamiento de PDFs ocurre **100% en el navegador** (Web Workers); no hay
+backend ni subida de archivos. La app es una SPA con **Vite**, que solo expone al
+cliente las variables con prefijo `VITE_`. Todas son **opcionales**.
 
-## Variables de Configuración
+## Variables
 
-### `NEXT_PUBLIC_MAX_FILE_SIZE`
+### `VITE_MAX_FILE_SIZE`
 
-- **Descripción**: Tamaño máximo permitido para archivos PDF en bytes
-- **Valor por defecto**: `5242880` (5MB)
-- **Ejemplo**: `NEXT_PUBLIC_MAX_FILE_SIZE=10485760` (para 10MB)
+- **Descripción**: Tamaño máximo permitido por archivo PDF, en bytes.
+- **Valor por defecto**: `10485760` (10 MB)
+- **Ejemplo**: `VITE_MAX_FILE_SIZE=5242880` (5 MB)
 
-### `PDF_CONCURRENCY`
+### `VITE_MAX_FILES`
 
-- **Descripción**: Número máximo de PDFs que se pueden procesar simultáneamente
-- **Valor por defecto**: `15`
-- **Ejemplo**: `PDF_CONCURRENCY=10`
+- **Descripción**: Número máximo de archivos por lote.
+- **Valor por defecto**: `20000`
+- **Ejemplo**: `VITE_MAX_FILES=10000`
 
-### `NODE_ENV`
+> La concurrencia de procesamiento **no se configura**: se ajusta automáticamente
+> al número de núcleos del equipo (`navigator.hardwareConcurrency`, acotado a `[2, 16]`).
 
-- **Descripción**: Entorno de ejecución (controla el logging)
-- **Valores**: `development`, `production`
-- **Ejemplo**: `NODE_ENV=production`
+## Configuración local (opcional)
 
-## Configuración Local (Opcional)
-
-Si necesitas personalizar estos valores, puedes crear un archivo `.env.local` en la raíz del proyecto:
+Copia `.env.example` a `.env.local` y ajusta los valores que necesites:
 
 ```bash
-NEXT_PUBLIC_MAX_FILE_SIZE=10485760
-PDF_CONCURRENCY=10
-NODE_ENV=development
+cp .env.example .env.local
 ```
 
-> **Nota**: El archivo `.env.local` está incluido en `.gitignore` y no debe ser committeado al repositorio.
+> **Nota**: `.env.local` está en `.gitignore` y no debe committearse. Como el
+> procesamiento es client-side, estas variables NO son secretos.
