@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
-import { X, UploadCloud, Table, Download, ShieldCheck } from "./icons";
+import { X, UploadCloud, Table, Download, Eraser, ShieldCheck } from "./icons";
 
 interface InstructionsModalProps {
   onClose: () => void;
@@ -10,7 +10,16 @@ interface InstructionsModalProps {
 const STEPS = [
   { icon: UploadCloud, title: "Carga tus PDF", text: "Arrastra o selecciona uno o varios archivos PDF." },
   { icon: Table, title: "Elige el formato", text: "Homologación, Revisión Técnica, SOAP o Permiso de Circulación." },
-  { icon: Download, title: "Descarga el Excel", text: "Revisa la vista previa y descarga la planilla consolidada." },
+  {
+    icon: Download,
+    title: "Revisa y descarga",
+    text: "Verás una vista previa compacta (usa “Expandir” para verla completa) y descargas el Excel.",
+  },
+  {
+    icon: Eraser,
+    title: "Nueva conversión",
+    text: "Al terminar, el formulario se contrae; pulsa “Nueva conversión” para procesar otro lote.",
+  },
 ];
 
 export default function InstructionsModal({ onClose }: InstructionsModalProps) {
