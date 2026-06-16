@@ -20,17 +20,24 @@ const LABELED_REGEXES: Record<string, RegExp> = {
   "Forma de Pago": /Forma\s+de\s+Pago\s*[:\-]?\s*(\w+)/i,
 };
 
-/** Extracción por patrones para PDFs sin etiquetas (valores sueltos en el texto). */
+/** Extracción por patrones para PDFs sin etiquetas (valores sueltos en el texto).
+ *  Importante: muchos PDFs (p. ej. Renca) extraen el texto SIN espacios entre
+ *  tokens (".../RENCA31/03/2027CAMIONETAVVTY83-7GRIS..."), por lo que NO se puede
+ *  usar `\b` (límite de palabra): los valores quedan pegados a letras/dígitos
+ *  vecinos y `\b` nunca coincide. Los patrones de abajo son auto-delimitados. */
 function extractUnlabeled(t: string): DocumentData {
-  const data: DocumentData = {};
+  // Placa chilena: 4 letras + 2 dígitos + guion + dígito verificador (0-9 o K);
+  // el guion entre letras y dígitos es opcional (admite "VVTY83-7" y "PKZW-43-8");
+  // formato antiguo: 2 letras + 4 dígitos. Sin `\b` ni flag `i` (placas en mayúscula),
+  // para no confundir con códigos de verificación en minúscula del documento.
+  const placaMatch = t.match(/[A-Z]{4}-?\d{2}-[0-9K]/) || t.match(/[A-Z]{2}-?\d{4}-[0-9K]/);
+  const placa = placaMatch ? placaMatch[0] : "";
 
-  const placaMatch =
-    t.match(/\b([A-Z]{4}\d{2}-[A-Z0-9K])\b/i) || t.match(/\b([A-Z]{2}\d{4}-\d)\b/i);
-  data["Placa Única"] = placaMatch ? placaMatch[1] : "";
-
-  const fechasSlash = t.match(/\b\d{2}\/\d{2}\/\d{4}\b/g) || [];
-  const fechasDash = (t.match(/\b\d{2}-\d{2}-\d{4}\b/g) || []).map((f) => f.replace(/-/g, "/"));
+  const fechasSlash = t.match(/\d{2}\/\d{2}\/\d{4}/g) || [];
+  const fechasDash = (t.match(/\d{2}-\d{2}-\d{4}/g) || []).map((f) => f.replace(/-/g, "/"));
   const fechasUnicas = [...new Set([...fechasSlash, ...fechasDash])];
+  let fechaEmision = "";
+  let fechaVencimiento = "";
   if (fechasUnicas.length >= 2) {
     const sorted = fechasUnicas
       .map((f) => {
@@ -38,39 +45,63 @@ function extractUnlabeled(t: string): DocumentData {
         return { str: f, ts: new Date(y, m - 1, d).getTime() };
       })
       .sort((a, b) => a.ts - b.ts);
-    data["Fecha de emisión"] = sorted[0].str;
-    data["Fecha de vencimiento"] = sorted[sorted.length - 1].str;
+    fechaEmision = sorted[0].str;
+    fechaVencimiento = sorted[sorted.length - 1].str;
   } else if (fechasUnicas.length === 1) {
-    data["Fecha de emisión"] = fechasUnicas[0];
-    data["Fecha de vencimiento"] = "";
-  } else {
-    data["Fecha de emisión"] = "";
-    data["Fecha de vencimiento"] = "";
+    fechaEmision = fechasUnicas[0];
   }
 
-  data["Código SII"] = "";
-
-  const moneyMatches = t.match(/\b(\d{1,3}\.\d{3})\b/g) || [];
+  // Valor del permiso: el importe (formato 000.000) que más se repite en el documento.
+  // Antes se eliminan los RUT (00.000.000-0) para no capturar fragmentos como
+  // "608.183" del RUT del propietario en lugar del valor real del permiso.
+  const sinRut = t.replace(/\d{1,3}(?:\.\d{3})*-[\dkK]/g, " ");
+  const moneyMatches = sinRut.match(/\d{3}\.\d{3}/g) || [];
+  let valorConPuntos = "";
   if (moneyMatches.length > 0) {
     const freq: Record<string, number> = {};
     for (const m of moneyMatches) freq[m] = (freq[m] || 0) + 1;
-    const sorted = Object.entries(freq).sort((a, b) => b[1] - a[1]);
-    data["Valor Permiso"] = sorted[0][0].replace(/\./g, "");
-  } else {
-    data["Valor Permiso"] = "";
+    valorConPuntos = Object.entries(freq).sort((a, b) => b[1] - a[1])[0][0];
+  }
+  const valor = valorConPuntos.replace(/\./g, "");
+
+  // Modalidad de pago: el PDF no tiene etiquetas de texto "total/cuota"; la "X" va
+  // pegada al importe de la casilla marcada. No basta buscar una "X" suelta porque
+  // el texto también contiene "4X4" (modelo) o "YN2X" (chasis), que no son marcas.
+  //   - X junto al valor total        -> Pago total.
+  //   - X junto a un importe de cuota -> 1ª o 2ª cuota. Las dos cuotas suman el total
+  //     y la 1ª es mayor que la 2ª, así que la cuota marcada es la 1ª si supera la
+  //     mitad del total, y la 2ª en caso contrario.
+  // Verificado con PDFs de pago total; la rama de cuotas queda pendiente de muestra real.
+  const num = (s: string) => Number(s.replace(/\./g, "")) || 0;
+  const marcado = [...t.matchAll(/(\d{3}\.\d{3})\s*X/g)].map((m) => m[1])[0] ?? "";
+  let pagoTotal = "No aplica";
+  let pagoCuota1 = "No aplica";
+  let pagoCuota2 = "No aplica";
+  if (marcado && marcado === valorConPuntos) {
+    pagoTotal = "X";
+  } else if (marcado) {
+    if (num(marcado) * 2 > num(valorConPuntos)) pagoCuota1 = "X";
+    else pagoCuota2 = "X";
   }
 
-  data["Total a pagar"] = data["Valor Permiso"];
-  data["Pago total"] = /\bX\b/.test(t) ? "X" : "No aplica";
-  data["Pago Cuota 1"] = "No aplica";
-  data["Pago Cuota 2"] = "No aplica";
+  const formaPago =
+    /firma\s+electr[oó]nica\s+avanzada/i.test(t) || /Digitally\s+signed/i.test(t)
+      ? "Internet"
+      : "Presencial";
 
-  if (/firma\s+electr[oó]nica\s+avanzada/i.test(t) || /Digitally\s+signed/i.test(t)) {
-    data["Forma de Pago"] = "Internet";
-  } else {
-    data["Forma de Pago"] = "Presencial";
-  }
-
+  // El orden de las claves define el orden de columnas del Excel para Renca (tras
+  // "Nombre PDF", "Placa Única" y "digito verificador", que añade buildTable).
+  const data: DocumentData = {};
+  data["Placa Única"] = placa;
+  data["Fecha de emisión"] = fechaEmision;
+  data["Fecha de vencimiento"] = fechaVencimiento;
+  data["Código SII"] = "";
+  data["Valor Permiso"] = valor;
+  data["Total a pagar"] = valor;
+  data["Pago total"] = pagoTotal;
+  data["Pago Cuota 1"] = pagoCuota1;
+  data["Pago Cuota 2"] = pagoCuota2;
+  data["Forma de Pago"] = formaPago;
   return data;
 }
 
