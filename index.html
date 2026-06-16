@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Conversor de PDF a Excel</title>
+    <meta
+      name="description"
+      content="Convierte documentos PDF (Homologación, CRT, SOAP, Permiso de Circulación) a Excel. Rápido y privado: se procesa en tu navegador."
+    />
+    <link rel="icon" href="/favicon.ico" />
+    <!-- Fija el tema antes del primer pintado para evitar parpadeo (FOUC). -->
+    <script>
+      (function () {
+        try {
+          var t = localStorage.getItem("theme");
+          var d = t ? t === "dark" : window.matchMedia("(prefers-color-scheme: dark)").matches;
+          if (d) document.documentElement.classList.add("dark");
+        } catch (e) {
+          /* storage no disponible: queda tema claro */
+        }
+      })();
+    </script>
+  </head>
+  <body class="min-h-screen font-sans">
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

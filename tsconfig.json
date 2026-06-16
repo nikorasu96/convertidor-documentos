@@ -1,34 +1,24 @@
 {
   "compilerOptions": {
-    "target": "ES2017",
-    "lib": ["dom", "dom.iterable", "esnext"],
-    "allowJs": true,
-    "skipLibCheck": true,
+    "target": "ES2020",
+    "useDefineForClassFields": true,
+    "lib": ["ES2020", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "jsx": "react-jsx",
     "strict": true,
     "noEmit": true,
+    "allowJs": true,
     "esModuleInterop": true,
-    "module": "esnext",
-    "moduleResolution": "bundler",
+    "skipLibCheck": true,
     "resolveJsonModule": true,
     "isolatedModules": true,
-    "jsx": "preserve",
-    "incremental": true,
-    "plugins": [
-      {
-        "name": "next"
-      }
-    ],
+    "moduleDetection": "force",
     "paths": {
       "@/*": ["./src/*"]
-    }
+    },
+    "types": ["vite/client", "vitest/globals", "node"]
   },
-  "include": [
-    "**/*.test.ts",
-    "next-env.d.ts",
-    "src",
-    ".next/types/**/*.ts",
-    "src/types",
-    "global.d.ts"
-  ],
-  "exclude": ["node_modules", "plugin:react-hooks/recommended"]
+  "include": ["src", "global.d.ts", "vite.config.ts", "scripts"],
+  "exclude": ["node_modules", "dist"]
 }

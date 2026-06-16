@@ -1,4 +1,7 @@
-import React from "react";
+"use client";
+
+import React, { useRef, useState, type DragEvent } from "react";
+import { UploadCloud, FileText } from "./icons";
 
 interface FileSelectorProps {
   files: FileList | null;
@@ -7,85 +10,98 @@ interface FileSelectorProps {
 }
 
 const FileSelector: React.FC<FileSelectorProps> = ({ files, loading, onFileChange }) => {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [dragActive, setDragActive] = useState(false);
+
+  const handleDrag = (e: DragEvent<HTMLDivElement>) => {
+    if (loading) return;
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.type === "dragenter" || e.type === "dragover") setDragActive(true);
+    else if (e.type === "dragleave") setDragActive(false);
+  };
+
+  const handleDrop = (e: DragEvent<HTMLDivElement>) => {
+    if (loading) return;
+    e.preventDefault();
+    e.stopPropagation();
+    setDragActive(false);
+    if (e.dataTransfer.files?.length) onFileChange(e.dataTransfer.files);
+  };
+
+  const count = files?.length ?? 0;
+
   return (
-    <div className="mb-4">
-      <div className="d-flex justify-content-center">
-        <div style={{ width: "100%", maxWidth: 400 }}>
-          <label
-            htmlFor="file-upload"
-            className="w-100"
-            style={{
-              cursor: loading ? "not-allowed" : "pointer",
-              userSelect: "none",
-            }}
-          >
-            <div
-              className="d-flex align-items-center justify-content-center"
-              style={{
-                background: "#fff",
-                color: "#222",
-                border: "1.5px solid #ced4da",
-                borderRadius: "0.5rem",
-                fontWeight: 500,
-                fontSize: "1.08rem",
-                padding: "0.75rem 1.5rem",
-                boxShadow: "0 1px 4px #0001",
-                pointerEvents: loading ? "none" : "auto",
-              }}
-            >
-              <i className="bi bi-upload" style={{ fontSize: 20, color: "#333" }}></i>
-              <span
-                style={{
-                  flex: 1,
-                  textAlign: "center",
-                  whiteSpace: "nowrap",
-                  overflow: "hidden",
-                  textOverflow: "ellipsis",
-                  maxWidth: "calc(100% - 40px)", // Ajusta dinámicamente el ancho
-                }}
-              >
-                {files && files.length > 0
-                  ? `${files.length} archivo${files.length > 1 ? "s" : ""} seleccionado${files.length > 1 ? "s" : ""}`
-                  : "Seleccionar archivos PDF"}
-              </span>
-            </div>
-            <input
-              id="file-upload"
-              type="file"
-              accept=".pdf"
-              multiple
-              style={{ display: "none" }}
-              disabled={loading}
-              onChange={(e) => onFileChange(e.target.files)}
-            />
-          </label>
-          {files && files.length > 0 && (
-            <div
-              style={{
-                marginTop: "0.75rem",
-                background: "#f8f9fa",
-                border: "1px solid #e3e6ea",
-                borderRadius: "0.5rem",
-                padding: "0.5rem 1rem",
-                fontSize: "0.98rem",
-                color: "#333",
-                maxHeight: 120,
-                overflowY: "auto",
-              }}
-            >
-              <div style={{ fontWeight: 600, marginBottom: 4 }}>Archivos seleccionados:</div>
-              <ul style={{ margin: 0, paddingLeft: 18 }}>
-                {Array.from(files).map((file, idx) => (
-                  <li key={idx} style={{ wordBreak: "break-all" }}>
-                    <i className="bi bi-file-earmark-pdf me-1" style={{ color: "#333" }}></i>
-                    {file.name}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
+    <div>
+      <div
+        role="button"
+        tabIndex={loading ? -1 : 0}
+        onClick={() => !loading && inputRef.current?.click()}
+        onKeyDown={(e) => {
+          if (!loading && (e.key === "Enter" || e.key === " ")) inputRef.current?.click();
+        }}
+        onDragEnter={handleDrag}
+        onDragOver={handleDrag}
+        onDragLeave={handleDrag}
+        onDrop={handleDrop}
+        className={[
+          "group relative flex flex-col items-center justify-center gap-3 rounded-2xl border border-dashed px-6 py-8 text-center outline-none transition-all duration-300",
+          loading ? "cursor-not-allowed opacity-60" : "cursor-pointer",
+          dragActive
+            ? "border-neutral-900 bg-neutral-100 dark:border-neutral-100 dark:bg-neutral-900"
+            : "border-neutral-300 bg-white hover:border-neutral-400 hover:bg-neutral-50 focus-visible:ring-2 focus-visible:ring-neutral-900/20 dark:border-neutral-700 dark:bg-neutral-900 dark:hover:border-neutral-600 dark:hover:bg-neutral-800/60 dark:focus-visible:ring-neutral-100/20",
+        ].join(" ")}
+      >
+        <span
+          className={[
+            "flex h-12 w-12 items-center justify-center rounded-full text-[1.4rem] transition-transform duration-300",
+            "bg-neutral-100 text-neutral-700 group-hover:scale-105 dark:bg-neutral-800 dark:text-neutral-300",
+            dragActive ? "scale-110" : "",
+          ].join(" ")}
+        >
+          <UploadCloud />
+        </span>
+        <div>
+          <p className="text-sm font-medium text-neutral-900 dark:text-neutral-100">Arrastra tus PDF aquí</p>
+          <p className="mt-0.5 text-xs text-neutral-500 dark:text-neutral-400">
+            o haz clic para seleccionarlos · se procesan en tu equipo
+          </p>
         </div>
+
+        <input
+          id="file-upload"
+          ref={inputRef}
+          type="file"
+          accept="application/pdf,.pdf"
+          multiple
+          className="hidden"
+          disabled={loading}
+          onChange={(e) => onFileChange(e.target.files)}
+        />
       </div>
+
+      {count > 0 && (
+        <div className="mt-3 animate-fade-in rounded-xl border border-neutral-200 bg-white dark:border-neutral-800 dark:bg-neutral-900">
+          <div className="flex items-center justify-between px-4 py-2.5">
+            <span className="text-xs font-medium text-neutral-500 dark:text-neutral-400">
+              {count} archivo{count > 1 ? "s" : ""} seleccionado{count > 1 ? "s" : ""}
+            </span>
+          </div>
+          <ul className="max-h-28 space-y-1 overflow-y-auto border-t border-neutral-100 px-4 py-2 text-sm dark:border-neutral-800">
+            {Array.from(files!)
+              .slice(0, 200)
+              .map((file, idx) => (
+                <li key={idx} className="flex items-center gap-2 text-neutral-600 dark:text-neutral-300">
+                  <FileText className="shrink-0 text-neutral-400 dark:text-neutral-500" />
+                  <span className="truncate">{file.name}</span>
+                </li>
+              ))}
+            {count > 200 && (
+              <li className="pl-6 text-xs text-neutral-400 dark:text-neutral-500">…y {count - 200} más</li>
+            )}
+          </ul>
+        </div>
+      )}
     </div>
   );
 };

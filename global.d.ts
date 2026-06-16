@@ -104,3 +104,10 @@ declare module "xlsx-populate" {
   const XlsxPopulate: XlsxPopulateStatic;
   export default XlsxPopulate;
 }
+
+// Build de navegador (sin dependencia de `fs`). Se usa vía import dinámico en el
+// cliente; el tipado preciso no es necesario (se castea a `any` en el writer).
+declare module "xlsx-populate/browser/xlsx-populate" {
+  const XlsxPopulate: unknown;
+  export default XlsxPopulate;
+}

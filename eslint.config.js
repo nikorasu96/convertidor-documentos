@@ -12,7 +12,7 @@ const cleanGlobals = (obj) => {
 module.exports = [
   // Configuración global para ignorar archivos de declaración y directorios generados
   {
-    ignores: ["node_modules/", ".next/", "**/*.d.ts"],
+    ignores: ["node_modules/", "dist/", ".next/", "**/*.d.ts"],
   },
   // Configuración para archivos TypeScript
   {
