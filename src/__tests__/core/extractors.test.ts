@@ -31,6 +31,14 @@ const PERMISO_UNLABELED =
   "Comprobante municipal VLBP65-K 01/03/2024 31/03/2025 169.917 169.917 " +
   "firma electrónica avanzada";
 
+// Caso Renca: unpdf extrae el texto SIN espacios entre tokens, los valores quedan
+// pegados a sus vecinos y el RUT del propietario (77.608.183-3) no debe confundirse
+// con el valor del permiso (720.993).
+const PERMISO_RENCA_PEGADO =
+  "Location: RENCA31/03/2027CAMIONETAVVTY83-7GRIS MERCURIOFORD720.993" +
+  "SERVICIOS FINANCIEROS EL GOLF SPA77.608.183-3VERDE-0270.372720.993X" +
+  "Este documento contiene una firma electrónica avanzada.Verificar en www.renca.cl. ID:0,0030-03-2026";
+
 describe("detectFormat", () => {
   it("detecta cada formato", () => {
     expect(detectFormat(HOMOLOGACION_TEXT)).toBe("CERTIFICADO_DE_HOMOLOGACION");
@@ -102,5 +110,19 @@ describe("permisoCirculacionExtractor", () => {
     expect(d["Valor Permiso"]).toBe("169917");
     expect(d["Forma de Pago"]).toBe("Internet");
     expect(() => permisoCirculacionExtractor.validate(d, "p.pdf")).not.toThrow();
+  });
+
+  it("extrae de PDF Renca con texto pegado (sin espacios) sin confundir RUT con valor", () => {
+    expect(detectFormat(PERMISO_RENCA_PEGADO)).toBe("PERMISO_CIRCULACION");
+    const d = permisoCirculacionExtractor.extract(PERMISO_RENCA_PEGADO);
+    expect(d["Placa Única"]).toBe("VVTY83-7");
+    expect(d["Fecha de emisión"]).toBe("30/03/2026");
+    expect(d["Fecha de vencimiento"]).toBe("31/03/2027");
+    expect(d["Valor Permiso"]).toBe("720993"); // no "608183" (fragmento del RUT)
+    expect(d["Total a pagar"]).toBe("720993");
+    expect(d["Pago total"]).toBe("X"); // la X va pegada al valor total (720.993X)
+    expect(d["Pago Cuota 1"]).toBe("No aplica");
+    expect(d["Pago Cuota 2"]).toBe("No aplica");
+    expect(() => permisoCirculacionExtractor.validate(d, "renca.pdf")).not.toThrow();
   });
 });
