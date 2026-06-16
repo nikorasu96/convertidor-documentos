@@ -5,6 +5,11 @@ import { ConversionError } from "../../domain/errors";
 import { buscar } from "../shared";
 
 function extract(text: string): DocumentData {
+  // Colapsamos los espacios/tabs horizontales (preservando los saltos de línea, que
+  // el campo "Firmado por" usa como delimitador) a un único espacio. Esto elimina el
+  // backtracking catastrófico (ReDoS) del regex de "Modelo" (`\s+(.+?)[ \t]+COLOR`) y
+  // del de "Color" ante un run largo de espacios sin la palabra de cierre.
+  text = text.replace(/[^\S\r\n]+/g, " ");
   return {
     "Fecha de Emisión": buscar(text, /FECHA DE EMISIÓN\s+([0-9A-Z\/]+)/i) || "",
     "Nº Correlativo": buscar(text, /N[°º]\s*CORRELATIVO\s+([A-Z0-9\-]+)/i) || "",
@@ -19,7 +24,11 @@ function extract(text: string): DocumentData {
     "Marca": buscar(text, /MARCA\s+([A-Z]+)/i) || "",
     "Año": buscar(text, /AÑO\s+([0-9]{4})/i) || "",
     "Modelo": buscar(text, /MODELO\s+(.+?)[ \t]+COLOR/i) || "",
-    "Color": buscar(text, /COLOR\s+([A-Z\s\(\)0-9\.\-]+?)(?=\s+VIN\b|$)/i) || "",
+    // El cuantificador del color está acotado a {1,60} (no `+`). Con `+`, la clase
+    // incluye `\s` (que matchea \n, no colapsado aquí) y se solapa con el `\s+` del
+    // lookahead, dando backtracking O(n²) ante "COLOR " + letras + muchos \n sin VIN.
+    // Acotar a 60 (ningún color real lo excede) lo vuelve lineal sin cambiar la captura.
+    "Color": buscar(text, /COLOR\s+([A-Z\s\(\)0-9\.\-]{1,60}?)(?=\s+VIN\b|$)/i) || "",
     "VIN": buscar(text, /VIN\s+([A-Z0-9]+)/i) || "",
     "Nº Motor": ((): string => {
       const motor = buscar(text, /N[°º]\s*MOTOR\s+([A-Z0-9]+(?:\s+[A-Z0-9]+)?)/i) || "";

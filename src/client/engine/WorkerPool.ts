@@ -98,12 +98,19 @@ export class WorkerPool {
     try {
       bytes = await task.readBytes();
     } catch {
-      slot.task = null;
-      task.resolve(failure(task.fileName, "PARSE_ERROR", `No se pudo leer el archivo "${task.fileName}".`));
-      this.pump();
+      // Solo resolvemos si el slot sigue siendo nuestro (no reciclado durante el await).
+      if (slot.task === task) {
+        slot.task = null;
+        task.resolve(failure(task.fileName, "PARSE_ERROR", `No se pudo leer el archivo "${task.fileName}".`));
+        this.pump();
+      }
       return;
     }
-    if (this.terminated) return;
+    // Durante el `await` anterior el slot pudo reciclarse (onWorkerFailure) y la tarea
+    // ya estar resuelta y reasignada a otro slot/worker. Si el slot dejó de ser nuestro
+    // (o el pool terminó), abortamos: postear o armar el timer aquí corrompería el slot
+    // (timer huérfano -> timeout espurio atribuido a OTRO archivo).
+    if (this.terminated || slot.task !== task) return;
 
     slot.timer = setTimeout(() => {
       // Worker colgado: lo reciclamos y resolvemos la tarea como fallo.

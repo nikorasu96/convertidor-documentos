@@ -54,7 +54,11 @@ function extractUnlabeled(t: string): DocumentData {
   // Valor del permiso: el importe (formato 000.000) que más se repite en el documento.
   // Antes se eliminan los RUT (00.000.000-0) para no capturar fragmentos como
   // "608.183" del RUT del propietario en lugar del valor real del permiso.
-  const sinRut = t.replace(/\d{1,3}(?:\.\d{3})*-[\dkK]/g, " ");
+  // Nota: el cuantificador de los grupos de miles está acotado a `{0,4}` (no `*`)
+  // para evitar backtracking catastrófico (ReDoS) ante un run largo de "1.000.000…"
+  // sin el "-[\dkK]" final. Un RUT chileno no excede 4 grupos de miles, así que el
+  // límite no afecta la extracción legítima y vuelve el patrón lineal.
+  const sinRut = t.replace(/\d{1,3}(?:\.\d{3}){0,4}-[\dkK]/g, " ");
   const moneyMatches = sinRut.match(/\d{3}\.\d{3}/g) || [];
   let valorConPuntos = "";
   if (moneyMatches.length > 0) {

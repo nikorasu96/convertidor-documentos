@@ -14,6 +14,14 @@ import { getExtractor } from "../extraction/registry";
 /** Bajo este nº de caracteres con texto consideramos que el PDF no tiene capa de texto. */
 const MIN_TEXT_LENGTH = 20;
 
+/**
+ * Tope de caracteres de texto que se procesan por documento. Defensa contra "bombas
+ * de texto" (PDF pequeño con una capa de texto enorme) y contra la amplitud del
+ * backtracking de los regex de extracción: ningún documento vehicular legítimo se
+ * acerca a este tamaño, así que recortar es seguro y acota CPU/memoria del worker.
+ */
+const MAX_TEXT_LENGTH = 2_000_000;
+
 const SCANNED_MESSAGE =
   "Documento escaneado sin capa de texto extraíble. Requiere una versión digital con texto (o OCR).";
 
@@ -53,6 +61,9 @@ export async function processDocument(
       new ConversionError("PARSE_ERROR", `No se pudo leer el PDF "${fileName}": ${toErrorMessage(e)}`)
     );
   }
+
+  // Cota defensiva de tamaño (anti text-bomb / acota el coste de los regex).
+  if (text.length > MAX_TEXT_LENGTH) text = text.slice(0, MAX_TEXT_LENGTH);
 
   // 2. Sin capa de texto (PDF escaneado).
   if (text.replace(/\s/g, "").length < MIN_TEXT_LENGTH) {
