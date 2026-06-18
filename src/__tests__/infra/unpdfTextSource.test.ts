@@ -1,9 +1,10 @@
 // Regresión de DoS por "text-bomb": la extracción debe acotar el pico de memoria
-// consumiendo el texto en STREAMING con corte/cancelación tempranos, sin materializar
-// el resto del content stream. Antes del 1er fix, unpdf hacía Promise.all sobre las 1000
-// páginas (medido: ~1.1 GB de heap desde 0.72 MB). El 1er fix (getTextContent por página)
-// dejó un bypass intra-página (getTextContent materializa el array COMPLETO de items de
-// una página antes de poder cortar); este test cubre el fix definitivo con streaming.
+// consumiendo el texto en STREAMING y DEJANDO DE LEER en cuanto se llena el presupuesto,
+// sin materializar el resto del content stream. Antes del 1er fix, unpdf hacía Promise.all
+// sobre las 1000 páginas (medido: ~1.1 GB de heap desde 0.72 MB). El 1er fix
+// (getTextContent por página) dejó un bypass intra-página; este test cubre el fix con
+// streaming pull-based. Validado empíricamente con PDFs-bomba reales (1000 págs y 1 pág
+// con 400k líneas posicionadas): pico de heap acotado a ~40 MB en vez de >1 GB.
 import { describe, it, expect } from "vitest";
 import { extractBoundedText } from "@/infra/pdf/unpdfTextSource";
 
@@ -16,33 +17,26 @@ interface FakeChunk {
 }
 
 /** Doble de un PDFDocumentProxy con páginas que entregan chunks PRE-construidos vía
- *  streamTextContent. Registra páginas pedidas, liberadas y stream cancelados. */
+ *  streamTextContent. Registra páginas pedidas y liberadas. */
 function makeDoc(numPages: number, chunksForPage: (page: number) => FakeChunk[]) {
   const requestedPages: number[] = [];
   const cleanedPages: number[] = [];
-  const cancelledPages: number[] = [];
   return {
     requestedPages,
     cleanedPages,
-    cancelledPages,
     numPages,
     async getPage(n: number) {
       requestedPages.push(n);
       const chunks = chunksForPage(n);
       let idx = 0;
-      let cancelled = false;
       return {
         streamTextContent() {
           return {
             getReader() {
               return {
                 async read() {
-                  if (cancelled || idx >= chunks.length) return { done: true, value: undefined };
+                  if (idx >= chunks.length) return { done: true, value: undefined };
                   return { done: false, value: chunks[idx++] };
-                },
-                async cancel() {
-                  cancelled = true;
-                  cancelledPages.push(n);
                 },
                 releaseLock() {},
               };
@@ -59,13 +53,12 @@ function makeDoc(numPages: number, chunksForPage: (page: number) => FakeChunk[])
 }
 
 /** Doble que genera chunks PEREZOSAMENTE (no pre-construye nada): simula el coste real
- *  de materialización de pdf.js, de modo que si el código NO cortara/cancelara, drenaría
+ *  de materialización de pdf.js, de modo que si el código NO dejara de leer, drenaría
  *  hasta `safetyMaxChunks` (test colgado). Permite afirmar el corte temprano de verdad. */
 function makeBombDoc(numPages: number, charsPerItem: number, safetyMaxChunks = 5_000_000) {
   const stats = {
     requestedPages: [] as number[],
     pulledChunks: 0,
-    cancelledPages: [] as number[],
     cleanedPages: [] as number[],
   };
   return {
@@ -74,21 +67,16 @@ function makeBombDoc(numPages: number, charsPerItem: number, safetyMaxChunks = 5
     async getPage(n: number) {
       stats.requestedPages.push(n);
       let produced = 0;
-      let cancelled = false;
       return {
         streamTextContent() {
           return {
             getReader() {
               return {
                 async read() {
-                  if (cancelled || produced >= safetyMaxChunks) return { done: true, value: undefined };
+                  if (produced >= safetyMaxChunks) return { done: true, value: undefined };
                   produced++;
                   stats.pulledChunks++;
                   return { done: false, value: { items: [{ str: "x".repeat(charsPerItem) }] } };
-                },
-                async cancel() {
-                  cancelled = true;
-                  stats.cancelledPages.push(n);
                 },
                 releaseLock() {},
               };
@@ -105,7 +93,7 @@ function makeBombDoc(numPages: number, charsPerItem: number, safetyMaxChunks = 5
 }
 
 describe("extractBoundedText (anti text-bomb, streaming)", () => {
-  it("corta y CANCELA el stream a media página sin drenar todo (bypass intra-página)", async () => {
+  it("deja de leer el stream a media página sin drenar todo (bypass intra-página)", async () => {
     // Una sola página que produciría texto sin fin: 1000 chars por chunk.
     const doc = makeBombDoc(1, 1000);
 
@@ -113,9 +101,8 @@ describe("extractBoundedText (anti text-bomb, streaming)", () => {
 
     // Tope DURO: nunca excede maxChars.
     expect(text.length).toBe(2_000_000);
-    // Clave: se canceló el stream y solo se tiraron ~2000 chunks (2e6/1000), MUY lejos
-    // del safetyMax (5e6). El break/cancel interrumpe la materialización intra-página.
-    expect(doc.stats.cancelledPages).toEqual([1]);
+    // Clave: solo se tiraron ~2000 chunks (2e6/1000), MUY lejos del safetyMax (5e6).
+    // El break interrumpe la materialización intra-página (stream pull-based).
     expect(doc.stats.pulledChunks).toBeLessThanOrEqual(2001);
     expect(doc.stats.cleanedPages).toEqual([1]);
   });
@@ -126,7 +113,6 @@ describe("extractBoundedText (anti text-bomb, streaming)", () => {
     expect(text.length).toBe(2_000_000);
     // No se pidió la página 2..1000 -> el pico no depende del nº de páginas.
     expect(doc.stats.requestedPages).toEqual([1]);
-    expect(doc.stats.cancelledPages).toEqual([1]);
   });
 
   it("replica la normalización de unpdf (str+EOL por item, páginas unidas por \\n, \\s+ -> ' ')", async () => {
@@ -136,8 +122,6 @@ describe("extractBoundedText (anti text-bomb, streaming)", () => {
     // unpdf: page1="ABCD\n", page2="EF"; join("\n") -> "ABCD\n\nEF"; \s+->" " -> "ABCD EF"
     const text = await extractBoundedText(doc, 2_000_000);
     expect(text).toBe("ABCD EF");
-    // Documento normal -> no se cancela ningún stream (se drena hasta done).
-    expect(doc.cancelledPages).toEqual([]);
   });
 
   it("acumula varios chunks de una misma página y respeta el orden", async () => {

@@ -50,7 +50,6 @@ interface TextChunkLike {
 }
 interface ReaderLike {
   read(): Promise<{ done: boolean; value?: TextChunkLike }>;
-  cancel(reason?: unknown): Promise<void> | void;
   releaseLock?: () => void;
 }
 interface ReadableLike {
@@ -98,8 +97,8 @@ export async function extractBoundedText(
         if (total >= maxChars) break;
       }
       const reader = page.streamTextContent().getReader();
-      let capped = false;
       try {
+        let capped = false;
         while (!capped) {
           const { done, value } = await reader.read();
           if (done) break;
@@ -117,15 +116,11 @@ export async function extractBoundedText(
             total += piece.length;
           }
         }
+        // Al dejar de leer (capped) el stream pull-based de pdf.js deja de producir; NO
+        // llamamos reader.cancel() porque puede lanzar un rechazo asíncrono NO capturable
+        // ("Controller is already closed") si compite con el cierre natural del stream y
+        // tumbar el worker. La liberación efectiva la hace page.cleanup() / pdf.destroy().
       } finally {
-        // Si cortamos a media página, cancelamos para que pdf.js deje de parsear el resto.
-        if (capped) {
-          try {
-            await reader.cancel();
-          } catch {
-            /* cancelar es best-effort */
-          }
-        }
         try {
           reader.releaseLock?.();
         } catch {
