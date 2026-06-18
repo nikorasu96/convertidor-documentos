@@ -6,10 +6,12 @@
 import { getDocumentProxy } from "unpdf";
 import type { PdfTextSource } from "@/core/text/PdfTextSource";
 
-/** Tope de páginas por documento. Un PDF puede declarar un árbol de páginas enorme y
- *  forzar a pdf.js a iterar miles de páginas (amplificación CPU/memoria). Ningún
- *  documento vehicular legítimo se acerca a este número. */
-const MAX_PAGES = 1000;
+/** Tope de páginas por documento (rechazo temprano de PDFs con árbol de páginas absurdo
+ *  que fuerza a pdf.js a iterar y amplificar CPU/memoria). Sobre el corpus real el máximo
+ *  observado es 2 páginas (todos los demás formatos, 1); 50 deja ~25× de margen sin que
+ *  pueda afectar a un documento vehicular legítimo. La extracción ya acota la memoria por
+ *  longitud (streaming), así que esto es solo un fast-fail barato y defensa en capas. */
+const MAX_PAGES = 50;
 
 /**
  * Tope DURO de caracteres extraídos (defensa anti "text-bomb").
