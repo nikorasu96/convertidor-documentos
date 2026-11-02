@@ -59,3 +59,12 @@ uninstall-service.js
 
 # claude code (ajustes personales)
 .claude/settings.local.json
+
+# Datos de terceros: nunca versionar documentos ni salidas (el repo es público)
+*.pdf
+*.xlsx
+*.xls
+*.csv
+
+# Handoffs de sesión del plugin medidor-contexto (pueden citar patentes del corpus)
+docs/handoffs/

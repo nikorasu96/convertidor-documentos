@@ -11,8 +11,11 @@ function extract(text: string): DocumentData {
   // colapso ningún cuantificador de espacios puede re-particionar un run grande.
   const t = text.replace(/\s+/g, " ");
 
+  // Capturas acotadas a {1,30}: con `+`, un prefijo repetido sin espacios
+  // ("POLIZAN"×N, "INSCRIPCIONRVM"×N) hace que la clase se trague el resto del texto
+  // en cada aparición buscando el "-" → O(n²). Los valores reales miden ≤ 11.
   const inscripcionRegex =
-    /INSCRIPC[ÍI]ON\s*R\s*\.?\s*V\s*\.?\s*M\s*\.?\s*(?::|\-)?\s*([A-Z0-9]+\s*-\s*[A-Z0-9]+)/i;
+    /INSCRIPC[ÍI]ON\s*R\s*\.?\s*V\s*\.?\s*M\s*\.?\s*(?::|\-)?\s*([A-Z0-9]{1,30}\s*-\s*[A-Z0-9]{1,30})/i;
   const inscripcion = (buscar(t, inscripcionRegex) || "").trim();
 
   const bajoCodigo = (buscar(t, /Bajo\s+el\s+c[óo]digo\s*[:\-]?\s*([A-Z0-9\-]+)/i) || "").trim();
@@ -26,7 +29,7 @@ function extract(text: string): DocumentData {
   const rigeDesde = (buscar(t, /RIGE\s+DESDE\s*[:\-]?\s*(\d{2}[-/]\d{2}[-/]\d{4})/i) || "").trim();
   const hasta = (buscar(t, /HAST(?:\s*A)?\s*[:\-]?\s*(\d{2}[-/]\d{2}[-/]\d{4})/i) || "").trim();
 
-  const poliza = (buscar(t, /POLI[ZS]A\s*N[°º]?\s*[:\-]?\s*([A-Z0-9]+\s*-\s*[A-Z0-9]+)/i) || "")
+  const poliza = (buscar(t, /POLI[ZS]A\s*N[°º]?\s*[:\-]?\s*([A-Z0-9]{1,30}\s*-\s*[A-Z0-9]{1,30})/i) || "")
     .trim()
     .replace(/\s*-\s*/, "-");
 

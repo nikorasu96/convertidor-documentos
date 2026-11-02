@@ -41,11 +41,18 @@ Varias regex de extracción colgaban un worker al 100 % de CPU ante entradas adv
 | `INSCRIPCION/HASTA/RIGE/RUT/POLIZA` (×4) | `formats/soap.ts` | O(n²) | colapsar `\s+`→`" "` antes de extraer |
 | Strip de RUT `(?:\.\d{3})*-` (replace global) | `formats/permisoCirculacion.ts` | O(n²), >300 s a 2 MB | acotar a `(?:\.\d{3}){0,4}` |
 | `COLOR …` con `\s` en la clase + lookahead | `formats/homologacion.ts` | O(n²) con `\n` | acotar el cuantificador a `{1,60}` |
+| `MODELO\s+(.+?)[ \t]+COLOR` con `"MODELO "` repetido sin `COLOR` *(2026-11)* | `formats/homologacion.ts` | O(n²), ~85 s con un PDF de 4,7 KB | acotar la captura a `{1,200}` |
+| `INSCRIPCION`/`POLIZA` con prefijo repetido sin espacios *(2026-11)* | `formats/soap.ts` | O(n²), ~30 s con 600 KB | acotar la captura a `{1,30}` por segmento |
+| Validador de `Nº Motor` (clases solapadas) *(2026-11)* | `formats/homologacion.ts` | O(n²), >30 s con un PDF de 1,8 KB | acotar la captura a `{1,40}` por segmento |
 
 Defensa adicional en `pipeline/processDocument.ts`: **cota de texto a 2 MB** antes de
-extraer (anti *text-bomb* y acota la amplitud de cualquier regex). Se verificó de forma
-independiente que **todas** las regex restantes (CRT, `VALIDO_PATTERN`, `Firmado por`,
-fechas, importes…) son lineales.
+extraer (anti *text-bomb* y acota la amplitud de cualquier regex).
+
+**Lección de la auditoría de 2026-11:** la afirmación previa de que "todas las regex
+restantes son lineales" era falsa. Colapsar el whitespace cierra los runs de espacios,
+pero no el vector que queda: un **prefijo repetido** que cabe entero en una clase sin tope
+seguida de un sufijo obligatorio (`"POLIZAN"` dentro de `[A-Z0-9]+…-`). Regla para regex
+nuevas: toda captura seguida de un sufijo obligatorio debe tener un tope (`{1,N}`).
 
 ### 2. Inyección de fórmulas / CSV injection (CWE-1236) — `client/excel/buildWorkbook.ts`
 La columna **"Nombre PDF"** (= nombre de archivo, 100 % controlado por quien genera el
@@ -59,6 +66,11 @@ PDF) y la hoja *Estadísticas* escribían el valor sin sanear. Se introdujo
 
 Durante el bucle se cerraron **tres bypasses sucesivos** de esta función (prefijo de
 whitespace; NEL/LS/PS; format chars Cf). Cubierta por tests en `__tests__/client/buildWorkbook.test.ts`.
+
+*(2026-11)* Dos fallos de integridad que dejaban **inutilizable el Excel de toda la
+tanda** con un solo PDF malicioso: los no-caracteres **U+FFFE/U+FFFF** (ilegales en XML;
+Excel no lo abre ni reparando) ahora se eliminan, y cada celda se **trunca a 32.767
+caracteres** (límite de Excel), contando el apóstrofo y sin partir pares surrogate.
 
 ### 3. Recursos del worker / robustez
 - **Fuga de memoria**: `infra/pdf/unpdfTextSource.ts` no liberaba el documento de pdf.js
@@ -75,6 +87,22 @@ whitespace; NEL/LS/PS; format chars Cf). Cubierta por tests en `__tests__/client
 y 2 **moderadas** (prototype pollution `_.unset`/`_.omit`). Se fijó **`lodash 4.18.1`** vía
 `overrides` en `pnpm-workspace.yaml`. `pnpm audit --prod` → **0 vulnerabilidades**.
 
+*(2026-11)* `pnpm audit` **completo** (incluye desarrollo) daba 70 vulnerabilidades en
+herramientas de build/test/lint. Se migró de `rolldown-vite` 7 y eslint 9 (ambos
+deprecados) a `vite` 8 y eslint 10, se actualizaron las demás dentro de su major y se
+forzó `minimatch` 11 → **0**. Endurecimiento contra gusanos de npm (Shai-Hulud/ChainDrop):
+`minimumReleaseAge` de 3 días y `trustPolicy: no-downgrade` en `pnpm-workspace.yaml`, y
+`devEngines` para que solo pnpm pueda instalar. Se verificó que el lockfile no contiene
+ninguna versión comprometida de ChainDrop (familia `keyv`/`cacheable`: están las versiones
+seguras, publicadas antes del ataque, con hash igual al del registro).
+
+### 5. Datos de terceros en el historial de git *(2026-11)*
+El repo es **público** y el commit `2944fe0` agregó dos certificados CRT reales
+(`pdf de prueba/`, con patente, VIN y firmante). Se borraron del árbol, pero siguen en el
+historial. `.gitignore` ahora bloquea `*.pdf`, `*.xlsx`, `*.xls`, `*.csv` y
+`docs/handoffs/`. **Pendiente de decisión del dueño:** purgar el historial (reescritura +
+force-push) y pedir a GitHub que limpie su caché.
+
 ## Revisado y sin vulnerabilidad explotable
 XSS (React escapa; cero sinks peligrosos), prototype pollution en `buildTable` (las claves
 son literales de los extractores; ningún valor del PDF se vuelve clave), el `eval` del shim
@@ -85,12 +113,10 @@ son literales de los extractores; ningún valor del PDF se vuelve clave), el `ev
   DoS auto-infligido y recuperable; el fix limpio es moverla a un Web Worker.
 - `detectFormat` forjable y validadores permisivos (`/^.+$/`): el usuario elige el formato y
   procesa sus propios archivos; el Excel ya queda neutralizado contra fórmulas.
-- Higiene de configuración: `.npmrc minimumReleaseAge` contradictorio con
-  `pnpm-workspace.yaml`, `rolldown` en beta, directorio `lodash@4.17.21` huérfano en `.pnpm`.
 - `file.name` con caracteres de control/RTL mostrado crudo en la lista de la UI
   (`FileSelector`): el Excel ya lo sanea; la UI muestra archivos que el propio usuario eligió.
 
 ## Tests
-Cobertura ampliada de **24 → 37** tests: `neutralizeFormula` (inyección de fórmulas) y
+Cobertura ampliada de **24 → 50** tests: `neutralizeFormula` (inyección de fórmulas) y
 regresión de ReDoS (`__tests__/core/redos.test.ts`, entradas patológicas que deben
 resolverse en tiempo lineal).

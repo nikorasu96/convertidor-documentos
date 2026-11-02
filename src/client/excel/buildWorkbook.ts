@@ -45,11 +45,24 @@ const FORMULA_LEAD = /^[\s\p{Cf}]*[=+\-@]/u;
 //    algunos importadores tratan como salto de línea (2ª línea con fórmula viva).
 //  - Separadores de línea Unicode LS/PS (U+2028-U+2029): mismo riesgo de 2ª línea.
 //  - Controles bidireccionales / RTL override (U+202A-202E, U+2066-2069): spoofing.
+//  - No-caracteres U+FFFE/U+FFFF: ilegales en XML 1.0; Excel no abre el .xlsx ni reparándolo.
 const UNSAFE_RANGES: ReadonlyArray<[number, number]> = [
   [0x00, 0x08], [0x0b, 0x0c], [0x0e, 0x1f],
   [0x7f, 0x9f],
   [0x2028, 0x2029], [0x202a, 0x202e], [0x2066, 0x2069],
+  [0xfffe, 0xffff],
 ];
+
+// Límite de Excel por celda: con un carácter más, el .xlsx de toda la tanda no abre.
+const MAX_CELL_CHARS = 32_767;
+
+function truncateCell(value: string, max: number): string {
+  if (value.length <= max) return value;
+  let end = max - 1;
+  const last = value.charCodeAt(end - 1);
+  if (last >= 0xd800 && last <= 0xdbff) end--;
+  return value.slice(0, end) + "…";
+}
 const UNSAFE_CHARS = new RegExp(
   "[" +
     UNSAFE_RANGES.map((r) => String.fromCharCode(r[0]) + "-" + String.fromCharCode(r[1])).join("") +
@@ -75,11 +88,12 @@ const UNSAFE_CHARS = new RegExp(
  *  2) Si CUALQUIER línea —tras saltar espacios iniciales— empieza por `= + - @`,
  *     antepone un apóstrofo. Cubre " =cmd" (espacio/NBSP/BOM inicial) y las celdas
  *     multilínea ("...\n=cmd"), sin alterar el dato visible legítimo.
+ *  3) Trunca a MAX_CELL_CHARS (contando el apóstrofo) sin partir un par surrogate.
  */
 export function neutralizeFormula(value: string): string {
   const clean = value.replace(UNSAFE_CHARS, "");
   const risky = clean.split(/\r\n|\r|\n/).some((line) => FORMULA_LEAD.test(line));
-  return risky ? `'${clean}` : clean;
+  return risky ? `'${truncateCell(clean, MAX_CELL_CHARS - 1)}` : truncateCell(clean, MAX_CELL_CHARS);
 }
 
 function setColumnWidths(sheet: any, headers: string[], rows: string[][]): void {

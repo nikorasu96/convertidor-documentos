@@ -60,4 +60,36 @@ describe("ReDoS regression", () => {
     const ms = timed(() => soapExtractor.extract(evil));
     expect(ms).toBeLessThan(THRESHOLD_MS);
   });
+
+  // Prefijo repetido SIN espacios hasta el tope de extracción (2M caracteres): el colapso
+  // de whitespace no ayuda; solo las capturas acotadas lo mantienen lineal.
+  const AT_CAP = 2_000_000;
+  const fill = (prefix: string, unit: string) => prefix + unit.repeat(Math.ceil(AT_CAP / unit.length));
+
+  it("SOAP: 'POLIZAN' repetido sin '-' termina rápido", () => {
+    const ms = timed(() => soapExtractor.extract(fill("SEGURO OBLIGATORIO ", "POLIZAN")));
+    expect(ms).toBeLessThan(THRESHOLD_MS);
+  });
+
+  it("SOAP: 'INSCRIPCIONRVM' repetido sin '-' termina rápido", () => {
+    const ms = timed(() => soapExtractor.extract(fill("SEGURO OBLIGATORIO ", "INSCRIPCIONRVM")));
+    expect(ms).toBeLessThan(THRESHOLD_MS);
+  });
+
+  it("homologación: 'MODELO ' repetido sin COLOR termina rápido", () => {
+    const ms = timed(() => homologacionExtractor.extract(fill("CERTIFICADO DE HOMOLOGACIÓN ", "MODELO ")));
+    expect(ms).toBeLessThan(THRESHOLD_MS);
+  });
+
+  it("homologación: Nº MOTOR enorme no dispara el validador cuadrático", () => {
+    const evil = "CERTIFICADO DE HOMOLOGACIÓN N° MOTOR " + "A".repeat(AT_CAP) + "a1";
+    const ms = timed(() => {
+      try {
+        homologacionExtractor.validate(homologacionExtractor.extract(evil), "x.pdf");
+      } catch {
+        // VALIDATION_ERROR esperado: solo importa cuánto tarda en llegar.
+      }
+    });
+    expect(ms).toBeLessThan(THRESHOLD_MS);
+  });
 });

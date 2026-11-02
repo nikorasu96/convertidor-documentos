@@ -23,7 +23,9 @@ function extract(text: string): DocumentData {
     "Tipo de Vehículo": buscar(text, /TIPO DE VEHÍCULO\s+([A-ZÑ]+)/i) || "",
     "Marca": buscar(text, /MARCA\s+([A-Z]+)/i) || "",
     "Año": buscar(text, /AÑO\s+([0-9]{4})/i) || "",
-    "Modelo": buscar(text, /MODELO\s+(.+?)[ \t]+COLOR/i) || "",
+    // Acotado a {1,200}: con `.+?`, "MODELO " repetido sin "COLOR" recorre el resto
+    // del texto desde cada aparición → O(n²). El modelo real más largo mide 53.
+    "Modelo": buscar(text, /MODELO\s+(.{1,200}?)[ \t]+COLOR/i) || "",
     // El cuantificador del color está acotado a {1,60} (no `+`). Con `+`, la clase
     // incluye `\s` (que matchea \n, no colapsado aquí) y se solapa con el `\s+` del
     // lookahead, dando backtracking O(n²) ante "COLOR " + letras + muchos \n sin VIN.
@@ -31,7 +33,9 @@ function extract(text: string): DocumentData {
     "Color": buscar(text, /COLOR\s+([A-Z\s\(\)0-9\.\-]{1,60}?)(?=\s+VIN\b|$)/i) || "",
     "VIN": buscar(text, /VIN\s+([A-Z0-9]+)/i) || "",
     "Nº Motor": ((): string => {
-      const motor = buscar(text, /N[°º]\s*MOTOR\s+([A-Z0-9]+(?:\s+[A-Z0-9]+)?)/i) || "";
+      // Acotado a {1,40}: el validador /^[A-Z0-9 ]+(?:\s*[A-Za-z]+)?$/ tiene clases
+      // solapadas y es O(n²) sobre un valor largo. El motor real más largo mide 18.
+      const motor = buscar(text, /N[°º]\s*MOTOR\s+([A-Z0-9]{1,40}(?:\s+[A-Z0-9]{1,40})?)/i) || "";
       return motor.replace(/\s+(C|El)$/i, "").trim();
     })(),
     "Firmado por": ((): string => {

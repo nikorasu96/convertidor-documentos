@@ -84,4 +84,24 @@ describe("neutralizeFormula", () => {
     // El carácter de fórmula en medio del valor no se toca (solo importa el inicio de línea).
     expect(neutralizeFormula("A=B")).toBe("A=B");
   });
+
+  it("elimina los no-caracteres U+FFFE/U+FFFF (ilegales en XML: Excel no abre el .xlsx)", () => {
+    const FFFE = String.fromCharCode(0xfffe);
+    const FFFF = String.fromCharCode(0xffff);
+    expect(neutralizeFormula("COROLLA" + FFFF + "X")).toBe("COROLLAX");
+    expect(neutralizeFormula("malo" + FFFE + ".pdf")).toBe("malo.pdf");
+  });
+
+  it("trunca al límite de Excel de 32.767 caracteres por celda, contando el apóstrofo", () => {
+    expect(neutralizeFormula("P".repeat(40_000))).toHaveLength(32_767);
+    expect(neutralizeFormula("P".repeat(32_767))).toBe("P".repeat(32_767));
+    const risky = neutralizeFormula("=" + "P".repeat(40_000));
+    expect(risky).toHaveLength(32_767);
+    expect(risky.startsWith("'=")).toBe(true);
+  });
+
+  it("no parte un par surrogate al truncar", () => {
+    const out = neutralizeFormula("P".repeat(32_765) + "😀" + "P".repeat(10));
+    expect(out).toBe("P".repeat(32_765) + "…");
+  });
 });

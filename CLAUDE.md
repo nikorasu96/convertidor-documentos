@@ -26,5 +26,6 @@ TSX_TSCONFIG_PATH="<repo>/tsconfig.json" "<repo>/node_modules/.bin/tsx" "<repo>/
 
 ## Handoffs
 
-Los handoffs de sesión (los pide el plugin `medidor-contexto`) van en `docs/handoffs/`,
+Los handoffs de sesión (los pide el plugin `medidor-contexto`) van en `docs/handoffs/`
+(ignorada por git: el repo es público y pueden citar patentes del corpus),
 un archivo por sesión: `AAAA-MM-DD-tema.md`.
