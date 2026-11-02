@@ -1,6 +1,6 @@
 {
   "name": "medidor-contexto",
-  "version": "0.8.0",
+  "version": "0.8.1",
   "author": { "name": "nicolas-endress" },
   "description": "Medidor del contexto usado y del uso de la cuenta (5 h y semanal): banda con barra en la terminal, /contexto en cualquier superficie, aviso a Claude al cruzar umbrales (60 % ofrece; 75 % y 85 % lo hacen escribir el handoff solo), las tareas en segundo plano en ejecución, con el avance, el modelo y los tokens de cada agente (banda y /tareas), y un vigilante de caché que avisa antes de que venza",
   "types": "./types/index.d.ts"

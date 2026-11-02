@@ -29,7 +29,8 @@ ningún repo.
   (`⠹ 2 tareas en ejecución: comando «Levantar API» 1m 5s · subagente
   «Revisar diff» 12s`). El motor no ofrece la lista: el mod la arma a partir
   del resultado de `Bash`, `Monitor`, `Agent` y `Workflow` cuando quedan en
-  segundo plano, y quita cada tarea con su aviso `<task-notification>` de
+  segundo plano (y de `SendMessage` cuando reanuda un subagente propio, vía
+  `session.send`), y quita cada tarea con su aviso `<task-notification>` de
   estado final, con un `TaskStop`, o cuando `$.agent.list()` da al subagente
   por terminado. El reloj de 1 s corre solo mientras haya tareas.
   `/tareas` muestra la lista y `/tareas limpiar` la vacía si quedó alguna

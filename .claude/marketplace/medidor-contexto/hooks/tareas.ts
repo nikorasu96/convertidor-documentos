@@ -32,6 +32,42 @@ export const agregar = (lista: readonly TareaFondo[], nueva: TareaFondo): TareaF
 export const quitar = (lista: readonly TareaFondo[], ids: readonly string[]): TareaFondo[] =>
   lista.filter(t => !ids.includes(t.id))
 
+/** Lo que el medidor necesita de un agente de `$.agent.list()`. */
+export type AgenteListado = { id: string; description: string; name?: string; parentId?: string }
+
+/**
+ * El subagente del loop principal al que va un SendMessage (por id o por
+ * nombre), que el mensaje reanuda; `undefined` si `to` no es uno de ellos
+ * (otra sesión, un compañero de equipo) o el nombre es ambiguo.
+ */
+export const agenteDestino = (
+  agentes: readonly AgenteListado[],
+  to: string,
+): AgenteListado | undefined => {
+  const propios = agentes.filter(a => a.parentId === undefined)
+  const porId = propios.find(a => a.id === to)
+  if (porId !== undefined) return porId
+  const porNombre = propios.filter(a => a.name === to)
+  return porNombre.length === 1 ? porNombre[0] : undefined
+}
+
+/** Margen tras anotar un subagente reanudado: `$.agent.list()` puede seguir diciendo `completed`. */
+export const GRACIA_REANUDADO_MS = 15_000
+
+/**
+ * De los ids que `$.agent.list()` da por terminados, los que se pueden quitar:
+ * no los de tareas anotadas hace menos de la gracia (un reanudado recién).
+ */
+export const quitablesTrasConciliar = (
+  lista: readonly TareaFondo[],
+  terminados: readonly string[],
+  ahora: number,
+): string[] =>
+  terminados.filter(id => {
+    const tarea = lista.find(t => t.id === id)
+    return tarea === undefined || ahora - tarea.desde >= GRACIA_REANUDADO_MS
+  })
+
 /**
  * Las tareas que un aviso `<task-notification>` da por terminadas. Un aviso
  * sin estado, o con `running` (el evento de un monitor), no termina nada.

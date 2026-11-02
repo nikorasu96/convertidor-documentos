@@ -4,6 +4,7 @@ import type { Hook, Register, Timer } from 'claude-code'
 import type { LecturaContexto, TareaFondo } from '../types'
 import {
   accion,
+  agenteDestino,
   agregar,
   cabeceraTareas,
   claveDe,
@@ -14,6 +15,7 @@ import {
   giro,
   lineaTarea,
   partesTarea,
+  quitablesTrasConciliar,
   quitar,
   sinClaves,
   terminadasEn,
@@ -137,7 +139,11 @@ async function conciliarAgentes($: Api): Promise<void> {
 
   // Sin lista no se concilia: la tarea sale igual con su aviso.
   const todos = await $.agent.list().catch(() => [])
-  const terminados = todos.filter(a => AGENTE_TERMINADO.has(a.status)).map(a => a.id)
+  const terminados = quitablesTrasConciliar(
+    lista,
+    todos.filter(a => AGENTE_TERMINADO.has(a.status)).map(a => a.id),
+    await $.clock.now(),
+  )
 
   if (terminados.length > 0) {
     await update($, tareas, l => quitar(l, terminados))
@@ -296,6 +302,21 @@ export const register: Register = on => {
 
     if (r.deny === undefined && r.isError !== true && r.result.error === undefined && e.agentId === undefined) {
       await lanzada($, 'workflow', r.result.taskId, r.result.workflowName ?? 'workflow', r.result.runId)
+    }
+
+    return r
+  }).catch(($, e, next) => next(e))
+
+  // Un SendMessage del loop principal a un subagente propio lo reanuda en segundo
+  // plano sin pasar por la herramienta Agent: se anota igual, y sale con su aviso
+  // de fin o cuando $.agent.list() lo da por terminado (pasada la gracia).
+  on('session.send', async ($, e, next) => {
+    const r = await next(e)
+
+    if (r.isDelivered && e.agentId === undefined) {
+      const agentes = await $.agent.list().catch(() => [])
+      const destino = agenteDestino(agentes, e.to)
+      if (destino !== undefined) await lanzada($, 'agente', destino.id, destino.description)
     }
 
     return r

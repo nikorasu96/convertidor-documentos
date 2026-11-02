@@ -4,7 +4,10 @@ import type { TareaFondo } from '../types'
 import { barraSvg, chipSvg, giroSvg } from './dibujo'
 import {
   accion,
+  agenteDestino,
   agregar,
+  GRACIA_REANUDADO_MS,
+  quitablesTrasConciliar,
   claveDe,
   clavesDe,
   conAccion,
@@ -27,6 +30,31 @@ const agente: TareaFondo = { id: 'a1', tipo: 'agente', descripcion: 'Revisar dif
 test('agregar no duplica y quitar saca por id', async () => {
   expect(agregar([comando], { ...comando, descripcion: 'otra' })).toEqual([{ ...comando, descripcion: 'otra' }])
   expect(quitar([comando, agente], ['b1'])).toEqual([agente])
+})
+
+test('SendMessage: reanuda un subagente propio por id o por nombre único; otro destino no', async () => {
+  const agentes = [
+    { id: 'a1', description: 'Revisar diff', name: 'revisor' },
+    { id: 'a2', description: 'Construir', name: 'doble' },
+    { id: 'a3', description: 'Otro', name: 'doble' },
+    { id: 'a4', description: 'Nieto', parentId: 'a1' },
+  ]
+
+  expect(agenteDestino(agentes, 'a1')?.description).toBe('Revisar diff')
+  expect(agenteDestino(agentes, 'revisor')?.id).toBe('a1')
+  // Ambiguo, de otro loop o una sesión ajena: no se anota.
+  expect(agenteDestino(agentes, 'doble')).toBe(undefined)
+  expect(agenteDestino(agentes, 'a4')).toBe(undefined)
+  expect(agenteDestino(agentes, 'session_x')).toBe(undefined)
+})
+
+test('conciliar no quita un subagente recién reanudado aunque la lista diga terminado', async () => {
+  const reanudado: TareaFondo = { id: 'a1', tipo: 'agente', descripcion: 'Revisar diff', desde: 100_000 }
+
+  expect(quitablesTrasConciliar([reanudado], ['a1'], 100_000 + GRACIA_REANUDADO_MS - 1)).toEqual([])
+  expect(quitablesTrasConciliar([reanudado], ['a1'], 100_000 + GRACIA_REANUDADO_MS)).toEqual(['a1'])
+  // Un id que no está en la lista se puede limpiar siempre.
+  expect(quitablesTrasConciliar([], ['zz'], 0)).toEqual(['zz'])
 })
 
 test('un aviso con estado final termina la tarea; el evento de un monitor no', async () => {
