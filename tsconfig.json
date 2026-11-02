@@ -19,6 +19,6 @@
     },
     "types": ["vite/client", "vitest/globals", "node"]
   },
-  "include": ["src", "global.d.ts", "vite.config.ts", "scripts"],
+  "include": ["src", "global.d.ts", "vite.config.mts", "scripts"],
   "exclude": ["node_modules", "dist"]
 }

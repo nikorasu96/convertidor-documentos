@@ -90,7 +90,7 @@ pnpm build      # type-check + build con Rolldown -> dist/
 pnpm preview    # sirve dist/ localmente para verificar
 ```
 
-> En hosting estático, replica las cabeceras de seguridad de `vite.config.ts`
+> En hosting estático, replica las cabeceras de seguridad de `vite.config.mts`
 > (CSP, X-Frame-Options, etc.) en tu CDN/reverse proxy.
 
 ### Calidad

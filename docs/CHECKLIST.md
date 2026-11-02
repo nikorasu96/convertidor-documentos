@@ -19,7 +19,7 @@
 - [ ] Variables `VITE_*` definidas si se cambian los límites (ver [`ENV_VARIABLES.md`](./ENV_VARIABLES.md)).
 - [ ] `pnpm build` (type-check + Rolldown) genera `dist/`; `pnpm preview` para verificar.
 - [ ] Publicar `dist/` como sitio estático (CDN / hosting estático).
-- [ ] **Replicar las cabeceras de seguridad de `vite.config.ts`** (CSP, X-Frame-Options,
+- [ ] **Replicar las cabeceras de seguridad de `vite.config.mts`** (CSP, X-Frame-Options,
       X-Content-Type-Options, Referrer-Policy, Permissions-Policy) en el CDN/reverse proxy:
       Vite no emite cabeceras en archivos estáticos servidos por terceros.
 - [ ] `pnpm audit` revisado; sin vulnerabilidades altas en dependencias de producción.

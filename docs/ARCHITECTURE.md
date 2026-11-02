@@ -48,7 +48,7 @@ src/
     files/             # validateFiles (tipo/tamaño/límite)
   hooks/useConversion  # máquina de estados (idle→processing→done/error/cancelled)
   components/          # UI (presentación) + icons.tsx (SVG) + ThemeToggle
-vite.config.ts         # plugins (react, tailwind), alias @/→src, worker ESM, cabeceras de seguridad, Vitest
+vite.config.mts         # plugins (react, tailwind), alias @/→src, worker ESM, cabeceras de seguridad, Vitest
 ```
 
 ### Principios SOLID
@@ -71,7 +71,7 @@ vite.config.ts         # plugins (react, tailwind), alias @/→src, worker ESM, 
 ## Seguridad
 
 - **CSP + cabeceras** (X-Frame-Options, nosniff, Referrer/Permissions-Policy) en
-  `vite.config.ts` para `vite dev`/`vite preview`. **En hosting estático de
+  `vite.config.mts` para `vite dev`/`vite preview`. **En hosting estático de
   producción deben replicarse en el proveedor (CDN/reverse proxy)** — Vite no
   emite cabeceras en archivos estáticos.
 - Errores tipados con `code` (`NO_TEXT_LAYER`, `FORMAT_MISMATCH`, `VALIDATION_ERROR`,
