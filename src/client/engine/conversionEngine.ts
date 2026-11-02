@@ -1,12 +1,24 @@
-// src/client/engine/conversionEngine.ts
-// Orquesta la conversión de un lote de archivos en el navegador usando el pool
-// de Web Workers. Devuelve los resultados en el MISMO orden que `files`.
-// Mantiene el hilo principal libre: solo lee bytes y agrega progreso.
+/**
+ * @module client/engine/conversionEngine
+ * @description Orquesta la conversión de un lote de archivos PDF en el navegador
+ * usando Web Workers. Mantiene el hilo principal libre y proporciona callbacks
+ * de progreso en tiempo real.
+ */
 
 import { WorkerPool, defaultPoolSize } from "./WorkerPool";
 import type { PDFFormat } from "@/core/domain/format";
 import type { ConversionOutcome } from "@/core/domain/result";
 
+/**
+ * Estado de progreso de la conversión en tiempo real.
+ * @interface Progress
+ * @property {number} processed - Archivos procesados hasta ahora
+ * @property {number} total - Total de archivos a procesar
+ * @property {number} successes - Conversiones exitosas
+ * @property {number} failures - Conversiones fallidas
+ * @property {number} estimatedMsLeft - Estimación en milisegundos (basado en velocidad actual)
+ * @property {number} elapsedMs - Tiempo transcurrido desde el inicio
+ */
 export interface Progress {
   processed: number;
   total: number;
@@ -16,14 +28,25 @@ export interface Progress {
   elapsedMs: number;
 }
 
+/**
+ * Opciones para la conversión de archivos.
+ * @interface ConvertOptions
+ * @property {AbortSignal} [signal] - Signal para cancelar la conversión
+ * @property {(p: Progress) => void} [onProgress] - Callback de progreso (throttled)
+ * @property {number} [poolSize] - Tamaño del pool de workers (default: auto-detect, rango [2,16])
+ */
 export interface ConvertOptions {
   signal?: AbortSignal;
   onProgress?: (p: Progress) => void;
-  /** Override del tamaño del pool (por defecto: nº de núcleos, acotado [2,16]). */
   poolSize?: number;
 }
 
-/** Crea un Web Worker de conversión (módulo). El bundler resuelve la URL. */
+/**
+ * Crea una instancia de Web Worker para conversión de PDFs.
+ * El bundler resuelve la URL automáticamente mediante import.meta.url.
+ * @returns {Worker} Instancia de Worker listo para procesar mensajes
+ * @internal
+ */
 function createConversionWorker(): Worker {
   return new Worker(new URL("../../workers/conversion.worker.ts", import.meta.url), {
     type: "module",
@@ -31,8 +54,44 @@ function createConversionWorker(): Worker {
 }
 
 /**
- * Convierte un lote de PDFs a resultados estructurados.
- * @throws DOMException("AbortError") si se cancela vía `signal`.
+ * Convierte un lote de archivos PDF a datos estructurados usando Web Workers.
+ *
+ * @description
+ * Procesa archivos en paralelo real (multi-core) manteniendo el hilo principal libre.
+ * Los archivos se procesan en el MISMO orden que el array de entrada.
+ *
+ * Características:
+ * - Lectura perezosa (lazy reading): bytes leídos solo cuando hay worker disponible
+ * - Zero-copy transfers: ArrayBuffer transferido sin duplicación
+ * - Timeout automático: PDFs que cuelguen se reciclan (timeout: 30s default)
+ * - Cancelación: soporta AbortSignal para parar la conversión
+ *
+ * @param {File[]} files - Array de archivos File a procesar (desde input file)
+ * @param {PDFFormat} format - Formato del documento (CRT|SOAP|Homologación|PermsoCirculación)
+ * @param {ConvertOptions} [opts] - Opciones de configuración
+ *
+ * @returns {Promise<ConversionOutcome[]>} Array de resultados en mismo orden que `files`
+ * - ConversionSuccess: { status: 'ok', fileName, data }
+ * - ConversionFailure: { status: 'error', fileName, code, error }
+ *
+ * @throws {DOMException} Con código 'AbortError' si se cancela vía opts.signal
+ *
+ * @example
+ * ```typescript
+ * const results = await convertFiles(fileList, 'CRT', {
+ *   poolSize: 4,
+ *   signal: abortController.signal,
+ *   onProgress: (p) => console.log(`${p.processed}/${p.total}`)
+ * });
+ *
+ * results.forEach(outcome => {
+ *   if (outcome.status === 'ok') {
+ *     console.log(outcome.data.patente);
+ *   } else {
+ *     console.error(`${outcome.fileName}: ${outcome.error}`);
+ *   }
+ * });
+ * ```
  */
 export async function convertFiles(
   files: File[],
