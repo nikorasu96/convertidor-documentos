@@ -1,7 +1,7 @@
 
 # Conversor PDF a Excel
 
-**Conversor PDF a Excel** es una aplicación web (React + Vite 7 + TypeScript) que convierte archivos PDF a un documento Excel. Soporta diversos formatos de PDF, incluyendo:
+**Conversor PDF a Excel** es una aplicación web (React + Vite 8 + TypeScript) que convierte archivos PDF a un documento Excel. Soporta diversos formatos de PDF, incluyendo:
 
 - Certificado de Homologación
 - Certificado de Revisión Técnica (CRT)
@@ -60,8 +60,12 @@ La aplicación extrae datos relevantes de los PDFs utilizando extractores espec�
    pnpm install
    ```
 
+   El proyecto usa **solo pnpm** (≥ 12.16.1): `npm`/`yarn` fallan a propósito
+   (`devEngines` en `package.json`). Las versiones nuevas de dependencias quedan en
+   cuarentena 3 días (`minimumReleaseAge` en `pnpm-workspace.yaml`).
+
 2. **(Opcional) variables de entorno:**
-   Copia `.env.example` a `.env.local` y ajusta límites si lo necesitas
+   Crea un `.env.local` y ajusta límites si lo necesitas
    (ver [`ENV_VARIABLES.md`](./docs/ENV_VARIABLES.md)). Todas son opcionales y NO son secretos.
 
 ---

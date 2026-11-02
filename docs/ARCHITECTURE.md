@@ -1,13 +1,13 @@
 # Arquitectura
 
 Conversor de PDF a Excel para documentos vehiculares chilenos (Homologación,
-CRT, SOAP, Permiso de Circulación). **SPA con Vite 7** (bundler Rust **Rolldown**)
+CRT, SOAP, Permiso de Circulación). **SPA con Vite 8** (bundler Rust **Rolldown** integrado)
 donde **todo el procesamiento ocurre en el navegador**: los PDFs nunca salen del
 equipo del usuario.
 
 ## Stack
 
-- **Vite 7 + Rolldown** (`rolldown-vite`) — build/bundler en Rust (build ~1 s).
+- **Vite 8** (Rolldown integrado) — build/bundler en Rust (build ~1 s).
 - **React 19** + **TypeScript** (SPA, sin SSR ni backend).
 - **Tailwind CSS v4** (`@tailwindcss/vite`).
 - **unpdf** (pdfjs) para extracción de texto, en un **pool de Web Workers**.

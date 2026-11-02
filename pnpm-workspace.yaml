@@ -1,15 +1,21 @@
-# Forzamos lodash >=4.18.1 (transitivo vía xlsx-populate) para cerrar
-# CVE de code injection (_.template) y prototype pollution (_.unset/_.omit).
 overrides:
+  # CVE de code injection (_.template) y prototype pollution (_.unset/_.omit), transitivo vía xlsx-populate.
   lodash@<4.18.1: 4.18.1
+  # GHSA-g3hv-75wg-m249 (DoS), transitivo vía eslint 10; el fix solo existe en minimatch 11.
+  "minimatch@>=10 <11.0.1": 11.0.3
 
 allowBuilds:
   esbuild: true
 
-ignoredBuiltDependencies:
-  - sharp
+# Cuarentena de 3 días para versiones nuevas: los gusanos de npm de 2026 (Shai-Hulud/ChainDrop)
+# se retiraron del registro en horas. Para un parche urgente, usar minimumReleaseAgeExclude.
+minimumReleaseAge: 4320
 
-# Reducido temporalmente para instalar parches de seguridad CVE-2025-55184
-minimumReleaseAge: 720
+# Rechaza versiones cuyo nivel de confianza (provenance/firma) baja respecto de las anteriores.
+trustPolicy: no-downgrade
+# Falso positivo verificado: publicada en 2024-11 por su mantenedor habitual, sin provenance como
+# todas las 6.x; el "downgrade" es contra las 7.x posteriores, que sí tienen provenance.
+trustPolicyExclude:
+  - undici-types@6.21.0
 
 saveExact: true
