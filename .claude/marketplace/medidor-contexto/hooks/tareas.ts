@@ -1,4 +1,5 @@
 import type { AgenteActivo, Progreso, TareaFondo } from '../types'
+import { miles } from './umbrales'
 
 /** Estados con los que una tarea ya no está en ejecución. */
 const SIGUE = new Set(['running', 'pending'])
@@ -104,7 +105,41 @@ export const conAccion = (
   progreso: Readonly<Record<string, Progreso>>,
   clave: string,
   ultima: string,
-): Record<string, Progreso> => ({ ...progreso, [clave]: { listos: progreso[clave]?.listos ?? 0, ultima } })
+): Record<string, Progreso> => ({
+  ...progreso,
+  [clave]: { ...progreso[clave], listos: progreso[clave]?.listos ?? 0, ultima },
+})
+
+/** Suma los tokens que un turno terminado de un agente reportó. */
+export const conTokens = (
+  progreso: Readonly<Record<string, Progreso>>,
+  clave: string,
+  tokens: number,
+): Record<string, Progreso> => ({
+  ...progreso,
+  [clave]: { ...progreso[clave], listos: progreso[clave]?.listos ?? 0, tokens: (progreso[clave]?.tokens ?? 0) + tokens },
+})
+
+/** Forma mínima del `usage` de `turn.complete` (`TurnUsage` del motor). */
+export type UsoTurno = {
+  input_tokens: number
+  output_tokens: number
+  cache_read_input_tokens: number
+  cache_creation_input_tokens: number
+}
+
+/** Tokens que procesó un turno: entrada, salida y caché (leída y escrita). */
+export const tokensDe = (uso: Readonly<UsoTurno> | undefined): number =>
+  uso === undefined
+    ? 0
+    : uso.input_tokens + uso.output_tokens + uso.cache_read_input_tokens + uso.cache_creation_input_tokens
+
+/** `claude-sonnet-5-5` → `sonnet-5-5`; un alias (`haiku`) queda igual. */
+export const nombreModelo = (modelo: string): string =>
+  modelo
+    .replace(/^claude-/, '')
+    .replace(/-\d{8}$/, '')
+    .replace(/\[.*\]$/, '')
 
 export const conListo = (progreso: Readonly<Record<string, Progreso>>, clave: string): Record<string, Progreso> => ({
   ...progreso,
@@ -115,10 +150,8 @@ export const conListo = (progreso: Readonly<Record<string, Progreso>>, clave: st
 export const clavesDe = (lista: readonly TareaFondo[], ids: readonly string[]): string[] =>
   lista.filter(t => ids.includes(t.id)).flatMap(t => (t.runId === undefined ? [t.id] : [t.id, t.runId]))
 
-export const sinClaves = (
-  progreso: Readonly<Record<string, Progreso>>,
-  claves: readonly string[],
-): Record<string, Progreso> => Object.fromEntries(Object.entries(progreso).filter(([k]) => !claves.includes(k)))
+export const sinClaves = <T>(progreso: Readonly<Record<string, T>>, claves: readonly string[]): Record<string, T> =>
+  Object.fromEntries(Object.entries(progreso).filter(([k]) => !claves.includes(k)))
 
 const plural = (n: number, uno: string, varios: string): string => `${n} ${n === 1 ? uno : varios}`
 
@@ -130,6 +163,26 @@ export type PartesTarea = {
   listos: number
   trabajando: number
   ultima?: string
+  /** Modelo del subagente, o los distintos de los agentes que trabajan en el workflow. */
+  modelo?: string
+  /** Tokens procesados por los turnos ya terminados de sus agentes (`3k tok`). */
+  tokens?: string
+}
+
+/** Modelos (sin repetir) de los agentes de una clave, o el del subagente de la tarea. */
+const modeloDe = (
+  t: TareaFondo,
+  clave: string,
+  activos: readonly AgenteActivo[],
+  modelos: Readonly<Record<string, string>>,
+): string | undefined => {
+  const ids = t.tipo === 'workflow' ? activos.filter(a => a.clave === clave).map(a => a.id) : [t.id]
+  const nombres = [...new Set(ids.flatMap(id => {
+    const m = modelos[id]
+    return m === undefined ? [] : [nombreModelo(m)]
+  }))]
+
+  return nombres.length === 0 ? undefined : nombres.join(', ')
 }
 
 export const partesTarea = (
@@ -137,9 +190,12 @@ export const partesTarea = (
   activos: readonly AgenteActivo[],
   progreso: Readonly<Record<string, Progreso>>,
   ahora: number,
+  modelos: Readonly<Record<string, string>> = {},
 ): PartesTarea => {
   const clave = t.runId ?? t.id
   const p = progreso[clave]
+  const modelo = t.tipo === 'agente' || t.tipo === 'workflow' ? modeloDe(t, clave, activos, modelos) : undefined
+  const tokens = p?.tokens === undefined || p.tokens === 0 ? undefined : `${miles(p.tokens)} tok`
   const base = {
     descripcion: recortar(t.descripcion, 30),
     duracion: duracion(ahora - t.desde),
@@ -147,7 +203,12 @@ export const partesTarea = (
     trabajando: t.tipo === 'workflow' ? activos.filter(a => a.clave === clave).length : 0,
   }
 
-  return p?.ultima === undefined ? base : { ...base, ultima: p.ultima }
+  return {
+    ...base,
+    ...(p?.ultima === undefined ? {} : { ultima: p.ultima }),
+    ...(modelo === undefined ? {} : { modelo }),
+    ...(tokens === undefined ? {} : { tokens }),
+  }
 }
 
 /** Una línea por tarea, para la banda: qué es, cuánto lleva y qué hacen sus agentes. */
@@ -156,14 +217,18 @@ export const lineaTarea = (
   activos: readonly AgenteActivo[],
   progreso: Readonly<Record<string, Progreso>>,
   ahora: number,
+  modelos: Readonly<Record<string, string>> = {},
 ): { principal: string; ultima?: string } => {
-  const p = partesTarea(t, activos, progreso, ahora)
+  const p = partesTarea(t, activos, progreso, ahora, modelos)
   let principal = `${NOMBRE[t.tipo]} «${p.descripcion}» ${p.duracion}`
 
   if (t.tipo === 'workflow') {
     principal += ` · ${plural(p.trabajando, 'agente trabajando', 'agentes trabajando')}`
     if (p.listos > 0) principal += `, ${plural(p.listos, 'listo', 'listos')}`
   }
+
+  if (p.modelo !== undefined) principal += ` · ${p.modelo}`
+  if (p.tokens !== undefined) principal += ` · ${p.tokens}`
 
   return p.ultima === undefined ? { principal } : { principal, ultima: p.ultima }
 }

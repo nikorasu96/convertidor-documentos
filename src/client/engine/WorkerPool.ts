@@ -1,14 +1,15 @@
-/**
- * @module client/engine/WorkerPool
- * @description Pool de Web Workers para procesamiento paralelo de PDFs.
- *
- * Proporciona paralelismo REAL en multi-core con características avanzadas:
- * - Lectura perezosa (lazy reading): bytes se leen solo cuando hay worker libre
- * - Zero-copy transfers: ArrayBuffer se transfiere sin duplicación
- * - Timeout y reciclaje automático: Workers colgados se reemplazan
- * - Tolerancia a fallos: nunca quedan promesas colgadas
- * - Memory efficient: memoria viva acotada a ~poolSize × max_file_size
- */
+// src/client/engine/WorkerPool.ts
+// Pool de Web Workers para procesar PDFs en paralelo real (multi-core).
+//
+// Características clave:
+//  - Lectura perezosa de bytes: el contenido del archivo se lee SOLO cuando hay
+//    un worker libre, por lo que la memoria viva se acota a ~poolSize archivos
+//    (procesar 10.000 PDFs no carga 10.000 buffers a la vez).
+//  - Transferables: el ArrayBuffer se transfiere (zero-copy) al worker.
+//  - Timeout por tarea + reciclaje del worker colgado: un PDF corrupto no puede
+//    bloquear el lote para siempre (bug del pool anterior).
+//  - Tolerancia a fallos: si un worker muere, se reemplaza y la tarea en vuelo
+//    se resuelve como fallo estructurado (nunca queda una promesa colgada).
 
 import type { PDFFormat } from "@/core/domain/format";
 import type { ConversionOutcome } from "@/core/domain/result";
@@ -31,50 +32,19 @@ interface Slot {
   timer: ReturnType<typeof setTimeout> | null;
 }
 
-/**
- * Opciones de configuración para WorkerPool.
- * @interface WorkerPoolOptions
- * @property {number} [size] - Número de workers en el pool
- *   - Si no se especifica: auto-detect vía navigator.hardwareConcurrency
- *   - Rango acotado: [2, 16] para evitar overhead en CPUs muy grandes
- * @property {number} [taskTimeoutMs] - Timeout por tarea en milisegundos
- *   - Default: 30000 (30 segundos)
- *   - Workers que cuelguen más tiempo se reciclan automáticamente
- */
 export interface WorkerPoolOptions {
+  /** Nº de workers. Por defecto navigator.hardwareConcurrency acotado a [2, 16]. */
   size?: number;
+  /** Timeout por archivo en ms. Por defecto 30s. */
   taskTimeoutMs?: number;
 }
 
-/**
- * Pool de Web Workers para procesamiento paralelo de PDFs.
- *
- * @description
- * Gestiona un conjunto de Web Workers que procesan archivos en paralelo real.
- * Características principales:
- * - Lectura perezosa: bytes se leen solo cuando hay worker disponible
- * - Zero-copy: ArrayBuffer se transfiere, no se copia
- * - Timeout: workers colgados se reciclan automáticamente
- * - Tolerancia a fallos: workers que crashean se reemplazan
- *
- * @example
- * ```typescript
- * const pool = new WorkerPool(() => new Worker(...), { size: 4 });
- * const outcome = await pool.submit('file.pdf', 'CRT', () => file.arrayBuffer());
- * pool.terminate();
- * ```
- */
 export class WorkerPool {
   private readonly slots: Slot[] = [];
   private readonly queue: Task[] = [];
   private nextId = 0;
   private terminated = false;
 
-  /**
-   * Crea una nueva instancia de WorkerPool.
-   * @param {() => Worker} createWorker - Factory para crear Workers
-   * @param {WorkerPoolOptions} [options] - Configuración del pool
-   */
   constructor(
     private readonly createWorker: () => Worker,
     private readonly options: WorkerPoolOptions = {}
@@ -83,28 +53,7 @@ export class WorkerPool {
     for (let i = 0; i < size; i++) this.slots.push(this.spawn());
   }
 
-  /**
-   * Encola un archivo para procesamiento.
-   *
-   * @description
-   * No lee los bytes inmediatamente. La lectura ocurre cuando hay un worker
-   * disponible, lo que mantiene la memoria viva acotada.
-   *
-   * @param {string} fileName - Nombre del archivo (para reportes)
-   * @param {PDFFormat} format - Formato del documento
-   * @param {ReadBytes} readBytes - Función que retorna Promise<ArrayBuffer>
-   *
-   * @returns {Promise<ConversionOutcome>} Resultado de conversión
-   *
-   * @example
-   * ```typescript
-   * const outcome = await pool.submit(
-   *   'documento.pdf',
-   *   'CRT',
-   *   () => fileInput.arrayBuffer()
-   * );
-   * ```
-   */
+  /** Encola un archivo. Los bytes se leen solo al despachar (memoria acotada). */
   submit(fileName: string, format: PDFFormat, readBytes: ReadBytes): Promise<ConversionOutcome> {
     return new Promise((resolve) => {
       this.queue.push({ id: this.nextId++, fileName, format, readBytes, resolve });
@@ -112,16 +61,6 @@ export class WorkerPool {
     });
   }
 
-  /**
-   * Detiene el pool y libera todos los recursos.
-   *
-   * @description
-   * - Termina todos los workers
-   * - Cancela tareas pendientes
-   * - Limpia timers
-   *
-   * Debe llamarse cuando se termina de usar el pool.
-   */
   terminate(): void {
     this.terminated = true;
     for (const slot of this.slots) {
@@ -230,30 +169,10 @@ export class WorkerPool {
   }
 }
 
-/**
- * Convierte un error a ConversionOutcome.
- * @internal
- */
 function failure(fileName: string, code: ConversionErrorCode, error: string): ConversionOutcome {
   return { status: "error", fileName, code, error };
 }
 
-/**
- * Detecta el tamaño óptimo del pool basado en hardware disponible.
- *
- * @description
- * - Intenta leer navigator.hardwareConcurrency (nº de CPUs lógicas)
- * - Si no está disponible, usa default de 4
- * - Acota el resultado a rango [2, 16] para evitar overhead
- *
- * Ejemplos:
- * - CPU 2-core   → Pool size: 2
- * - CPU 4-core   → Pool size: 4
- * - CPU 8-core   → Pool size: 8
- * - CPU 32-core  → Pool size: 16 (máximo)
- *
- * @returns {number} Tamaño recomendado del pool
- */
 export function defaultPoolSize(): number {
   const hc =
     typeof navigator !== "undefined" && navigator.hardwareConcurrency

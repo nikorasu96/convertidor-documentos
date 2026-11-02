@@ -1,7 +1,0 @@
-{
-  "name": "medidor-contexto",
-  "version": "0.6.1",
-  "author": { "name": "nicolas-endress" },
-  "description": "Medidor del contexto usado y del uso de la cuenta (5 h y semanal): banda con barra en la terminal, /contexto en cualquier superficie, aviso a Claude al cruzar umbrales para ofrecer HANDOFF.md, y las tareas en segundo plano en ejecución, con el avance de cada workflow (banda y /tareas)",
-  "types": "./types/index.d.ts"
-}

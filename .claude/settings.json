@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "enabledPlugins": {
+    "medidor-contexto@convertidor-documentos": true
+  },
+  "extraKnownMarketplaces": {
+    "convertidor-documentos": {
+      "source": {
+        "source": "directory",
+        "path": "./.claude/marketplace"
+      }
+    }
+  }
+}

@@ -23,10 +23,11 @@ cliente las variables con prefijo `VITE_`. Todas son **opcionales**.
 
 ## Configuración local (opcional)
 
-Copia `.env.example` a `.env.local` y ajusta los valores que necesites:
+Crea un archivo `.env.local` en la raíz con los valores que quieras cambiar:
 
 ```bash
-cp .env.example .env.local
+VITE_MAX_FILE_SIZE=5242880
+VITE_MAX_FILES=10000
 ```
 
 > **Nota**: `.env.local` está en `.gitignore` y no debe committearse. Como el

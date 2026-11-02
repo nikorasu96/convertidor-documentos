@@ -14,7 +14,7 @@ La aplicación extrae datos relevantes de los PDFs utilizando extractores espec�
 > [unpdf](https://github.com/unjs/unpdf)/pdfjs). Los archivos **nunca se suben a
 > ningún servidor**. Rendimiento medido: **~1000 PDFs en ~3 s** en un equipo de
 > 16 núcleos. La arquitectura completa está documentada en
-> [`ARCHITECTURE.md`](./ARCHITECTURE.md).
+> [`ARCHITECTURE.md`](./docs/ARCHITECTURE.md).
 
 ---
 
@@ -62,7 +62,7 @@ La aplicación extrae datos relevantes de los PDFs utilizando extractores espec�
 
 2. **(Opcional) variables de entorno:**
    Copia `.env.example` a `.env.local` y ajusta límites si lo necesitas
-   (ver [`ENV_VARIABLES.md`](./ENV_VARIABLES.md)). Todas son opcionales y NO son secretos.
+   (ver [`ENV_VARIABLES.md`](./docs/ENV_VARIABLES.md)). Todas son opcionales y NO son secretos.
 
 ---
 
@@ -113,7 +113,7 @@ Arquitectura por capas con núcleo puro y procesamiento en Web Workers. Resumen:
 - **`hooks/` + `components/` + `app/`** — UI en React (presentación) y el hook
   `useConversion` (máquina de estados).
 
-Detalle completo, principios SOLID y flujo en [`ARCHITECTURE.md`](./ARCHITECTURE.md).
+Detalle completo, principios SOLID y flujo en [`ARCHITECTURE.md`](./docs/ARCHITECTURE.md).
 
 ---
 

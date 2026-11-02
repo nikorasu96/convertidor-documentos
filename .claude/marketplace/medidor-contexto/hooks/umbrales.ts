@@ -33,14 +33,31 @@ export const barra = (percent: number, ancho = 20): string => {
 
 export const miles = (n: number): string => (n >= 1000 ? `${Math.round(n / 1000)}k` : String(n))
 
+/** Desde este umbral Claude escribe el handoff sin esperar a que se lo pidan. */
+const UMBRAL_HANDOFF = UMBRALES[1]
+
 /** Texto que lee Claude (nunca el usuario) al cruzar un umbral. */
-export const avisoParaClaude = (percent: number, umbral: number): string =>
-  [
-    `[medidor-contexto] El contexto de esta conversación está al ${percent}% (umbral ${umbral}%).`,
-    'Decíselo al usuario en esta respuesta, en una línea, y ofrecé dejar un handoff antes de',
-    'quedarse sin margen, donde lo indique el CLAUDE.md del proyecto; si no dice dónde,',
-    'preguntá en vez de crear carpetas nuevas.',
+export const avisoParaClaude = (percent: number, umbral: number): string => {
+  const cabeza = `[medidor-contexto] El contexto de esta conversación está al ${percent}% (umbral ${umbral}%).`
+
+  if (umbral < UMBRAL_HANDOFF) {
+    return [
+      cabeza,
+      'Decíselo al usuario en esta respuesta, en una línea, y ofrecé dejar un handoff antes de',
+      'quedarse sin margen, donde lo indique el CLAUDE.md del proyecto; si no dice dónde,',
+      'preguntá en vez de crear carpetas nuevas.',
+      'No interrumpas la tarea en curso: el aviso va al final de la respuesta.',
+    ].join(' ')
+  }
+
+  return [
+    cabeza,
+    'Decíselo al usuario en una línea y, sin esperar a que lo pida, escribí o actualizá ahora el handoff',
+    'en la ruta que indique el CLAUDE.md del proyecto, con estado actual (verificado vs. sin probar),',
+    'decisiones importantes con su porqué, próximo paso e información útil; si ya hay uno de esta sesión,',
+    'actualizalo en vez de crear otro. Si el CLAUDE.md no dice dónde, preguntá en vez de crear carpetas nuevas.',
     umbral >= UMBRALES[2]
-      ? 'Nivel crítico: priorizá cerrar o documentar el trabajo en curso.'
-      : 'No interrumpas la tarea en curso: el aviso va al final de la respuesta.',
+      ? 'Nivel crítico: priorizá dejar el handoff al día y cerrar o documentar el trabajo en curso.'
+      : 'Hacelo sin abandonar la tarea en curso y contale al usuario dónde quedó el archivo.',
   ].join(' ')
+}

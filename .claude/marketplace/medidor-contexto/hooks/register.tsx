@@ -10,13 +10,16 @@ import {
   clavesDe,
   conAccion,
   conListo,
+  conTokens,
   giro,
   lineaTarea,
   partesTarea,
   quitar,
   sinClaves,
   terminadasEn,
+  tokensDe,
 } from './tareas'
+import { avisoCacheParaClaude, estadoCache, porVencer, textoBanda, textoPorVencer } from './cache'
 import { barraSvg, chipSvg, giroSvg } from './dibujo'
 import { avisoParaClaude, barra, miles, nivelDe, rearmar, umbralNuevo } from './umbrales'
 import { resumenCuenta, usoMaximo } from './uso-cuenta'
@@ -25,9 +28,11 @@ const lectura = atom({ plugin: 'medidor-contexto', key: 'lectura' } as const, nu
 const limites = atom({ plugin: 'medidor-contexto', key: 'limites' } as const, [])
 const gasto = atom({ plugin: 'medidor-contexto', key: 'gasto' } as const, null)
 const tareas = atom({ plugin: 'medidor-contexto', key: 'tareas' } as const, [])
+const modelos = atom({ plugin: 'medidor-contexto', key: 'modelos' } as const, {})
 const ahora = atom({ plugin: 'medidor-contexto', key: 'ahora' } as const, 0)
 const activos = atom({ plugin: 'medidor-contexto', key: 'activos' } as const, [])
 const progreso = atom({ plugin: 'medidor-contexto', key: 'progreso' } as const, {})
+const ultimoTurno = atom({ plugin: 'medidor-contexto', key: 'ultimoTurno' } as const, null)
 
 /** Tareas que se muestran una por línea en la banda; el resto, «+N más». */
 const LINEAS_MAX = 4
@@ -51,6 +56,74 @@ const resumen = (l: LecturaContexto): string =>
 let reloj: Timer | null = null
 let pasos = 0
 
+// Reloj del vigilante de caché: corre desde el primer turno y se apaga al vencer la caché.
+let relojCache: Timer | null = null
+// Ya se avisó (o ya venció) en esta pausa; el próximo turno lo rearma.
+let cacheAvisada = false
+
+/** Cada cuánto mira el reloj del vigilante. */
+const CACHE_PASO_MS = 30_000
+
+function pararCache(): void {
+  relojCache?.cancel()
+  relojCache = null
+}
+
+// Un turno terminado (o un mensaje que va a la caché) empieza la cuenta de nuevo.
+async function armarCache($: Api, desde: number): Promise<void> {
+  pararCache()
+  cacheAvisada = false
+  await update($, ultimoTurno, () => desde)
+  relojCache = $.clock.every(CACHE_PASO_MS, () => {
+    void vigilarCache($).catch(() => pararCache())
+  })
+}
+
+// Avisa una vez al acercarse el vencimiento; al vencer redibuja la banda y se apaga.
+async function vigilarCache($: Api): Promise<void> {
+  const desde = await read($, ultimoTurno)
+
+  if (desde === null) return pararCache()
+
+  const estado = estadoCache(desde, await $.clock.now())
+
+  if (estado.vigente && porVencer(estado) && !cacheAvisada) {
+    cacheAvisada = true
+    $.ui.toast(textoPorVencer(estado.minutosRestantes))
+  }
+
+  if (!estado.vigente) {
+    cacheAvisada = true
+    pararCache()
+    await marcar($)
+  }
+}
+
+// Tras un hot reload el reloj anterior ya no existe: se retoma si la caché sigue vigente.
+async function reanudarCache($: Api): Promise<void> {
+  const desde = await read($, ultimoTurno)
+
+  if (desde !== null && relojCache === null && estadoCache(desde, await $.clock.now()).vigente) {
+    await armarCache($, desde)
+  }
+}
+
+// Si el mensaje llega con la caché vencida: texto para Claude, y la cuenta se rearma.
+async function avisoDeCache($: Api): Promise<string | null> {
+  const desde = await read($, ultimoTurno)
+
+  if (desde === null) return null
+
+  const t = await $.clock.now()
+  const estado = estadoCache(desde, t)
+
+  if (estado.vigente) return null
+
+  await armarCache($, t)
+
+  return avisoCacheParaClaude(estado.minutosVencida, (await read($, lectura))?.percent)
+}
+
 async function marcar($: Api): Promise<void> {
   const t = await $.clock.now()
   await update($, ahora, () => t)
@@ -69,6 +142,7 @@ async function conciliarAgentes($: Api): Promise<void> {
   if (terminados.length > 0) {
     await update($, tareas, l => quitar(l, terminados))
     await update($, progreso, p => sinClaves(p, terminados))
+    await update($, modelos, m => sinClaves(m, terminados))
   }
 }
 
@@ -124,7 +198,9 @@ async function terminadas($: Api, ids: readonly string[]) {
 
   // Con la tarea se van sus agentes y su avance, por id y por `runId`.
   const claves = clavesDe(await read($, tareas), ids)
+  const deAgentes = (await read($, activos)).filter(a => claves.includes(a.clave)).map(a => a.id)
   await update($, tareas, l => quitar(l, ids))
+  await update($, modelos, m => sinClaves(m, [...ids, ...deAgentes]))
   await update($, activos, l => l.filter(a => !claves.includes(a.clave)))
   await update($, progreso, p => sinClaves(p, claves))
   await seguirReloj($)
@@ -152,6 +228,7 @@ async function limpiarTodo($: Api) {
   await update($, tareas, () => [])
   await update($, activos, () => [])
   await update($, progreso, () => ({}))
+  await update($, modelos, () => ({}))
   await seguirReloj($)
 }
 
@@ -172,6 +249,7 @@ export const register: Register = on => {
     })
     // Tras un hot reload el reloj del módulo anterior ya no existe.
     await seguirReloj($)
+    await reanudarCache($)
 
     return next(e)
   })
@@ -228,6 +306,13 @@ export const register: Register = on => {
     const r = await next(e)
     const runId = e.workflow?.runId
 
+    // El modelo con el que arrancó, para mostrarlo mientras el agente trabaje.
+    if (r.deny === undefined && r.agentId !== undefined && r.model !== '') {
+      const quien = r.agentId
+      const modelo = r.model
+      await update($, modelos, m => ({ ...m, [quien]: modelo }))
+    }
+
     if (runId !== undefined && runId !== '' && r.deny === undefined && r.agentId !== undefined) {
       const id = r.agentId
 
@@ -239,6 +324,7 @@ export const register: Register = on => {
 
       if (respondio !== undefined && terminadosAntes.delete(id)) {
         await update($, activos, l => l.filter(a => a.id !== id))
+        await update($, modelos, m => sinClaves(m, [id]))
         if (respondio) await update($, progreso, p => conListo(p, runId))
       }
     }
@@ -265,11 +351,22 @@ export const register: Register = on => {
 
       const clave = (await read($, activos)).find(a => a.id === id)?.clave
 
+      // Los tokens del turno van a la tarea del agente (de workflow o subagente).
+      // Si el agent.spawn de un workflow llega después, esos tokens no se anotan.
+      const deTarea = clave ?? claveDe(await read($, tareas), [], id)
+      const gastados = tokensDe(e.usage)
+
+      if (deTarea !== undefined && gastados > 0) await update($, progreso, p => conTokens(p, deTarea, gastados))
+
       if (clave !== undefined && terminadosAntes.delete(id)) {
         await update($, activos, l => l.filter(a => a.id !== id))
+        await update($, modelos, m => sinClaves(m, [id]))
         if (respondio) await update($, progreso, p => conListo(p, clave))
       }
     }
+
+    // Solo el turno del loop principal toca la caché; el de un subagente no.
+    if (id === undefined) await armarCache($, await $.clock.now())
 
     return r
   }).catch(($, e, next) => next(e))
@@ -301,7 +398,11 @@ export const register: Register = on => {
 
   // Un /clear no vuelve a emitir session.start: la conversación nueva arranca sin tareas.
   on('session.end', async ($, e, next) => {
-    if (e.reason === 'clear') await limpiarTodo($)
+    if (e.reason === 'clear') {
+      await limpiarTodo($)
+      pararCache()
+      await update($, ultimoTurno, () => null)
+    }
 
     return next(e)
   }).catch(($, e, next) => next(e))
@@ -347,16 +448,22 @@ export const register: Register = on => {
       await terminadas($, terminadasEn(e.text))
     }
 
-    if (pendiente === null || e.origin.kind === 'plugin') {
+    if (e.origin.kind === 'plugin') {
       return next(e)
     }
 
-    const actual = await read($, lectura)
-    const percent = actual?.percent ?? pendiente
-    const aviso = avisoParaClaude(percent, pendiente)
-    pendiente = null
+    const avisos: string[] = []
+    const deCache = await avisoDeCache($)
 
-    return next({ ...e, context: [...(e.context ?? []), aviso] })
+    if (deCache !== null) avisos.push(deCache)
+
+    if (pendiente !== null) {
+      const percent = (await read($, lectura))?.percent ?? pendiente
+      avisos.push(avisoParaClaude(percent, pendiente))
+      pendiente = null
+    }
+
+    return next(avisos.length === 0 ? e : { ...e, context: [...(e.context ?? []), ...avisos] })
   }).catch(($, e, next) => next(e)) // un fallo del medidor nunca frena un prompt
 
   on('command.run', { command: 'contexto' }, async $ => {
@@ -384,9 +491,10 @@ export const register: Register = on => {
 
     const agentes = await read($, activos)
     const avance = await read($, progreso)
+    const deModelos = await read($, modelos)
     const t = await $.clock.now()
     const lineas = lista.map(tarea => {
-      const { principal, ultima } = lineaTarea(tarea, agentes, avance, t)
+      const { principal, ultima } = lineaTarea(tarea, agentes, avance, t, deModelos)
       return `- ${principal}${ultima === undefined ? '' : ` · ${ultima}`}`
     })
 
@@ -399,10 +507,14 @@ export const register: Register = on => {
     const lista = await read($, tareas)
     const agentes = await read($, activos)
     const avance = await read($, progreso)
+    const deModelos = await read($, modelos)
     const t = Math.max(await read($, ahora), await $.clock.now())
     const uso = resumenCuenta(ventanas, await read($, gasto), t)
 
-    if (e.props.hasSurvey || (actual === null && uso === '' && lista.length === 0)) {
+    const desde = await read($, ultimoTurno)
+    const lineaCache = desde === null ? '' : textoBanda(estadoCache(desde, t), actual?.tokens)
+
+    if (e.props.hasSurvey || (actual === null && uso === '' && lista.length === 0 && lineaCache === '')) {
       return next(e)
     }
 
@@ -419,7 +531,7 @@ export const register: Register = on => {
     const visibles = lista.slice(0, LINEAS_MAX)
 
     const filaTexto = (tarea: TareaFondo) => {
-      const { principal, ultima } = lineaTarea(tarea, agentes, avance, t)
+      const { principal, ultima } = lineaTarea(tarea, agentes, avance, t, deModelos)
 
       return (
         // Un solo Text por fila: si no entra, se corta al final en vez de partirse en columnas.
@@ -433,7 +545,7 @@ export const register: Register = on => {
     }
 
     const filaGrafica = (tarea: TareaFondo, Dibujo: NonNullable<typeof Svg>) => {
-      const p = partesTarea(tarea, agentes, avance, t)
+      const p = partesTarea(tarea, agentes, avance, t, deModelos)
       const total = p.listos + p.trabajando
 
       return (
@@ -452,6 +564,8 @@ export const register: Register = on => {
             )}
             {tarea.tipo === 'workflow' && <Text dimColor>{total === 0 ? 'arrancando' : `${p.listos}/${total}`}</Text>}
             <Text dimColor>{p.duracion}</Text>
+            {p.modelo !== undefined && <Text dimColor>{p.modelo}</Text>}
+            {p.tokens !== undefined && <Text dimColor>{p.tokens}</Text>}
             {tarea.tipo === 'agente' && (
               // Abre la conversación del subagente, como la lista de tareas nativa.
               <Button key={`ver-${tarea.id}`} dimColor onPress={() => verAgente($, tarea.id)}>
@@ -498,6 +612,7 @@ export const register: Register = on => {
               (nivelUso === 'ok' ? <Text dimColor>{uso}</Text> : <Text color={COLOR[nivelUso]}>{uso}</Text>)}
           </Box>
         )}
+        {lineaCache !== '' && <Text color="warning" wrap="truncate-end">{lineaCache}</Text>}
       </Box>
     )
   })

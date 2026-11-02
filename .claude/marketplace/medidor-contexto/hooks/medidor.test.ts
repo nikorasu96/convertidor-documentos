@@ -36,6 +36,20 @@ test('el aviso para Claude nombra la regla y el HANDOFF', async () => {
   expect(avisoParaClaude(90, 85)).toContain('crítico')
 })
 
+test('al 60 % solo se ofrece el handoff; desde el 75 % Claude lo escribe sin esperar', async () => {
+  const atento = avisoParaClaude(62, 60)
+  expect(atento).toContain('ofrecé dejar un handoff')
+  expect(atento).not.toContain('sin esperar')
+
+  for (const [percent, umbral] of [[78, 75], [90, 85]] as const) {
+    const aviso = avisoParaClaude(percent, umbral)
+    expect(aviso).toContain('sin esperar a que lo pida, escribí o actualizá ahora el handoff')
+    expect(aviso).toContain('CLAUDE.md')
+    expect(aviso).toContain('preguntá en vez de crear carpetas nuevas')
+    expect(aviso).not.toContain('ofrecé')
+  }
+})
+
 test('el prompt lleva el aviso al cruzar un umbral, y una sola vez', async ($, on) => {
   const vistos: (readonly string[] | undefined)[] = []
   const toasts: string[] = []

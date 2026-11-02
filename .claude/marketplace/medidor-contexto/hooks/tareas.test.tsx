@@ -9,13 +9,16 @@ import {
   clavesDe,
   conAccion,
   conListo,
+  conTokens,
   duracion,
   lineaTarea,
+  nombreModelo,
   quitar,
   recortar,
   resumenTareas,
   sinClaves,
   terminadasEn,
+  tokensDe,
 } from './tareas'
 
 const comando: TareaFondo = { id: 'b1', tipo: 'comando', descripcion: 'Levantar API', desde: 0 }
@@ -274,4 +277,78 @@ test('en el escritorio: fila de subagente con «ver», barra de contexto y un de
   expect(vistas).toEqual(['a9'])
   expect(toasts.at(-1)).toBe('No se pudo abrir el subagente')
   await ui.unmount()
+})
+
+test('modelo y tokens: nombre corto, suma de turnos y workflow con modelos distintos', async () => {
+  expect(nombreModelo('claude-sonnet-5-5')).toBe('sonnet-5-5')
+  expect(nombreModelo('claude-haiku-4-5-20251001')).toBe('haiku-4-5')
+  expect(nombreModelo('haiku')).toBe('haiku')
+  expect(tokensDe(undefined)).toBe(0)
+  expect(tokensDe({ input_tokens: 100, output_tokens: 50, cache_read_input_tokens: 1000, cache_creation_input_tokens: 10 })).toBe(
+    1160,
+  )
+
+  // conAccion no pierde los tokens ya sumados.
+  const p = conAccion(conTokens(conTokens({}, 'a1', 1_000), 'a1', 2_500), 'a1', 'Read a.ts')
+  expect(p).toEqual({ a1: { listos: 0, ultima: 'Read a.ts', tokens: 3_500 } })
+
+  expect(lineaTarea(agente, [], p, 62_000, { a1: 'claude-haiku-4-5' })).toEqual({
+    principal: 'subagente «Revisar diff» 12s · haiku-4-5 · 4k tok',
+    ultima: 'Read a.ts',
+  })
+
+  const wf: TareaFondo = { id: 'w1', tipo: 'workflow', descripcion: 'review', desde: 0, runId: 'wf_1' }
+  const activos = [
+    { id: 'x1', clave: 'wf_1' },
+    { id: 'x2', clave: 'wf_1' },
+    { id: 'x3', clave: 'wf_1' },
+  ]
+  const modelos = { x1: 'claude-sonnet-5-5', x2: 'claude-haiku-4-5', x3: 'claude-sonnet-5-5', otro: 'claude-opus-5' }
+  expect(lineaTarea(wf, activos, {}, 1_000, modelos).principal).toBe(
+    'workflow «review» 1s · 3 agentes trabajando · sonnet-5-5, haiku-4-5',
+  )
+  // Un comando nunca muestra modelo, aunque el id coincida.
+  expect(lineaTarea(comando, [], {}, 0, { b1: 'x' })).toEqual({ principal: 'comando «Levantar API» 0s' })
+})
+
+test('el modelo del agent.spawn y los tokens del turn.complete llegan a /tareas', async ($, on) => {
+  mock.clock(on, { now: 1_000_000 })
+  on('agent.spawn', async () => ({ model: 'claude-haiku-4-5', agentId: 'a9' }))
+  on('turn.complete', async (_$, e) => ({ text: e.answer }))
+  on('tool.call', { tool: 'Agent' }, async () => ({
+    result: { status: 'async_launched', agentId: 'a9', description: 'Revisar diff', prompt: 'p', outputFile: 'o' },
+  }))
+
+  await $.agent.spawn({ prompt: 'p', description: 'Revisar diff' })
+  await $.tool.call({ tool: 'Agent', description: 'Revisar diff', prompt: 'p' })
+
+  const tareas = async () =>
+    (
+      await $.command.run({
+        command: 'tareas',
+        args: '',
+        origin: { kind: 'composer' },
+        presentation: { isFullscreen: false, columns: 120 },
+      })
+    ).text
+
+  expect(await tareas()).toBe('1 tarea en ejecución:\n- subagente «Revisar diff» 0s · haiku-4-5')
+
+  await $.turn.complete({
+    answer: 'listo',
+    durationMs: 10,
+    isAborted: false,
+    turnId: 't1',
+    agentId: 'a9',
+    reason: 'answer',
+    usage: {
+      input_tokens: 3_000,
+      output_tokens: 500,
+      cache_read_input_tokens: 8_000,
+      cache_creation_input_tokens: 0,
+      model: 'claude-haiku-4-5',
+    },
+  })
+
+  expect(await tareas()).toBe('1 tarea en ejecución:\n- subagente «Revisar diff» 0s · haiku-4-5 · 12k tok')
 })

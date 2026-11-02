@@ -8,10 +8,13 @@ ningún repo.
 
 - **Aviso a Claude (todas las superficies, VS Code incluido).** Al cruzar
   60 %, 75 % y 85 % adjunta al siguiente prompt un bloque de contexto que lee
-  solo el modelo: decirle al usuario cuánto contexto queda y ofrecer un
-  handoff donde lo indique el `CLAUDE.md` del proyecto (si no dice dónde,
-  preguntar en vez de crear carpetas). Una vez por umbral; si una
-  compactación baja el porcentaje, se rearma.
+  solo el modelo. Al 60 % solo le pide avisar al usuario y ofrecer un handoff
+  donde lo indique el `CLAUDE.md` del proyecto. **Context Keeper (0.8):** al
+  75 % y al 85 % le pide **escribir o actualizar el handoff directamente**,
+  sin esperar a que el usuario lo pida (estado actual, decisiones con su
+  porqué, próximo paso, información útil), en la ruta que fije el
+  `CLAUDE.md`; si no dice dónde, preguntar en vez de crear carpetas. Una vez
+  por umbral; si una compactación baja el porcentaje, se rearma.
 - **Uso de la cuenta**: los límites que informa la última respuesta
   (`Sesión 5h`, `Semana` y las semanales por modelo, p. ej. `Semana Fable`),
   con el porcentaje y cuánto falta para el reset. Va en la banda (tenue
@@ -48,6 +51,32 @@ ningún repo.
   motor no la muestra, un toast dice por qué. La terminal sigue con el texto.
   Los tipos del motor dicen que la banda sale solo en terminal y escritorio,
   pero el panel de VS Code 2.1.314 también la dibuja.
+- **Mission Control (0.8)**: cada subagente o workflow suma a su línea (banda
+  y `/tareas`) el **modelo** (`agent.spawn`: `model` que resolvió el motor,
+  p. ej. `haiku-4-5`; en un workflow, los distintos de los agentes que
+  trabajan) y los **tokens** que procesaron sus turnos ya terminados
+  (`turn.complete.usage`: entrada + salida + caché, p. ej. `12k tok`), junto
+  a la herramienta actual que ya se mostraba. Limitaciones, porque la API no
+  los da: `$.agent.list()` solo trae `id`, `description`, `type`, `status`,
+  `parentId`, `spawnedBy` y `name` (ni modelo ni tokens); los tokens llegan
+  solo al **terminar** un turno del agente, así que mientras corre su primer
+  turno no hay cifra, y es lo procesado (suma de pedidos, con caché), no el
+  contexto vivo del agente; si el `agent.spawn` de un agente de workflow
+  llega después de su `turn.complete`, esos tokens no se anotan.
+- **Vigilante de caché (0.7)**: el prompt cache vence si pasa demasiado
+  tiempo entre un turno y el siguiente (1 hora con suscripción; 5 minutos con
+  API key o en overage), y el primer mensaje después —aunque sea «hola»—
+  relee toda la conversación. El mod anota el fin de cada turno del loop
+  principal; a 5 minutos del vencimiento muestra un toast («La caché vence en
+  5 min…», uno por pausa) y, ya vencida, la banda suma una línea
+  («Caché vencida hace 12 min: el próximo mensaje relee toda la conversación
+  (≈N tokens)»). Si el mensaje llega con la caché vencida, Claude recibe un
+  aviso para decírselo al usuario y, con el contexto en 50 % o más, sugerir
+  `/compact` o un handoff. El TTL (`CACHE_TTL_MIN`, 60) y el margen
+  (`CACHE_AVISO_MIN`, 5) viven en `hooks/cache.ts`: con API key hay que
+  bajar el TTL a 5. El reloj (cada 30 s) arranca con el primer turno y se
+  apaga al vencer; el mod no sabe si la cuenta está en overage, así que el
+  TTL no se ajusta solo.
 - **Banda arriba del prompt**: barra coloreada del contexto y uso de la
   cuenta; además, línea de estado desde el 60 % y toast al cruzar cada
   umbral. Las versiones viejas de la extensión de VS Code no dibujaban la
@@ -76,5 +105,6 @@ claude plugin test ~/.claude/plugins-locales/medidor-contexto
 
 Los umbrales y el texto del aviso viven en `hooks/umbrales.ts` y el formato
 del uso de la cuenta en `hooks/uso-cuenta.ts`, y la lista de tareas en
-`hooks/tareas.ts` (funciones puras);
+`hooks/tareas.ts` y las reglas del vigilante de caché en `hooks/cache.ts`
+(funciones puras);
 `hooks/register.tsx` solo los conecta a los eventos.

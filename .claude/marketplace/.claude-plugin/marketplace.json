@@ -1,0 +1,12 @@
+{
+  "name": "convertidor-documentos",
+  "description": "Plugins propios del proyecto convertidor-documentos (versionados en el repo)",
+  "owner": { "name": "nicolas-endress" },
+  "plugins": [
+    {
+      "name": "medidor-contexto",
+      "source": "./medidor-contexto",
+      "description": "Medidor de contexto: banda en la terminal, /contexto y aviso a Claude al cruzar umbrales para ofrecer un handoff"
+    }
+  ]
+}

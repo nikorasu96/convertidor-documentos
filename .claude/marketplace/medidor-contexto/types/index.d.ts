@@ -45,6 +45,8 @@ export type Progreso = {
   listos: number
   /** Lo último que hizo uno de sus agentes (`Read register.tsx`). */
   ultima?: string
+  /** Tokens procesados por los turnos ya terminados de sus agentes (`turn.complete.usage`). */
+  tokens?: number
 }
 
 declare module 'claude-code' {
@@ -61,8 +63,12 @@ declare module 'claude-code' {
       activos: AgenteActivo[]
       /** Avance de cada tarea con agentes, por clave. */
       progreso: Record<string, Progreso>
+      /** Modelo de cada agente que arrancó (`agent.spawn`), por id de agente. */
+      modelos: Record<string, string>
       /** Reloj del giro y de las duraciones; solo avanza mientras hay tareas. */
       ahora: number
+      /** Fin del último turno del loop principal, ms desde epoch; null antes del primero. */
+      ultimoTurno: number | null
     }
   }
 }

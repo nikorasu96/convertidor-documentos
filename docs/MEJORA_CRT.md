@@ -1,5 +1,9 @@
 # Mejora del Sistema de Revisión Técnica (CRT)
 
+> **Documento histórico.** Describe el cambio sobre la arquitectura anterior
+> (Next.js, `src/extractors/crtExtractor.ts`). El comportamiento sigue vigente, pero
+> hoy vive en [`src/core/extraction/formats/crt.ts`](../src/core/extraction/formats/crt.ts).
+
 ## 📋 Resumen de la Mejora
 
 Se ha mejorado el extractor de Certificados de Revisión Técnica (CRT) para que sea **más flexible y robusto**, aceptando PDFs con uno o ambos certificados.

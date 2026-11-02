@@ -16,7 +16,7 @@
 
 ## Despliegue
 
-- [ ] Variables `VITE_*` definidas si se cambian los límites (ver `.env.example`).
+- [ ] Variables `VITE_*` definidas si se cambian los límites (ver [`ENV_VARIABLES.md`](./ENV_VARIABLES.md)).
 - [ ] `pnpm build` (type-check + Rolldown) genera `dist/`; `pnpm preview` para verificar.
 - [ ] Publicar `dist/` como sitio estático (CDN / hosting estático).
 - [ ] **Replicar las cabeceras de seguridad de `vite.config.ts`** (CSP, X-Frame-Options,
