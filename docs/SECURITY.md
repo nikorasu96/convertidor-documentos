@@ -14,6 +14,13 @@ por clase de ataque → verificación adversaria (panel escéptico de 2 lentes p
 verificó empíricamente (p. ej. midiendo el backtracking en Node) antes de corregir. El
 bucle convergió tras 4 iteraciones; la última volvió **limpia** (0 hallazgos confirmados).
 
+**Re-auditoría 2026-11-02** (tras migrar el toolchain a Vite 8 / eslint 10): mismo bucle,
+con 5 cazadores (ReDoS, recursos/concurrencia, salida Excel, navegador/build, cadena de
+suministro) y, por hallazgo, un refutador y un reproductor empírico. La iteración 1
+confirmó 6 problemas distintos (secciones 1, 2 y 5, marcados *2026-11*); la iteración 2,
+que intentó eludir esos fixes, volvió **limpia**. Además se verificó contra el corpus real
+de 6.844 PDFs que los fixes no cambian ningún dato extraído.
+
 Puerta de validación tras cada fix (todo en verde):
 
 ```
@@ -115,6 +122,10 @@ son literales de los extractores; ningún valor del PDF se vuelve clave), el `ev
   procesa sus propios archivos; el Excel ya queda neutralizado contra fórmulas.
 - `file.name` con caracteres de control/RTL mostrado crudo en la lista de la UI
   (`FileSelector`): el Excel ya lo sanea; la UI muestra archivos que el propio usuario eligió.
+- *(2026-11)* Form XObjects anidados (1000³ `Do`): un PDF de ~1,7 KB mantiene a pdf.js
+  emitiendo ítems de 1 carácter hasta el timeout de 30 s, sin llegar a `MAX_EXTRACT_CHARS`.
+  Es CPU dentro de pdf.js acotada por el timeout (la clase de residual ya aceptada); un
+  plazo cooperativo en `extractBoundedText` solo bajaría 30 s → ~8 s sin cerrar la clase.
 
 ## Tests
 Cobertura ampliada de **24 → 50** tests: `neutralizeFormula` (inyección de fórmulas) y
